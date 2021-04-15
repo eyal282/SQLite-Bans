@@ -2,17 +2,15 @@
 {
 	"Version"
 	{
-		"Latest"	"4.9"
+		"Latest"	"2.3"
 	}
 	
-	"Notes"	"Removed errors from bad queries."
+	"Notes"	"Added Updater Support"
 }
 	
 "Files"
 {
-	"Plugin"	"Path_SM/plugins/UsefulCommands.smx"
-	"Plugin"	"Path_SM/translations/UsefulCommands.phrases.txt"
-	"Plugin"	"Path_SM/translations/ru/UsefulCommands.phrases.txt"
-	
-	"Source"	"Path_SM/scripting/UsefulCommands.sp"
+	"Plugin"	"Path_SM/plugins/SQLiteBans.smx"
+
+	"Source"	"Path_SM/scripting/SQLiteBans.sp"
 }
