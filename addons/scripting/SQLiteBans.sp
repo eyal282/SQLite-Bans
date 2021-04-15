@@ -4,9 +4,23 @@
 #include <basecomm>
 #include <adminmenu>
 
+
+#undef REQUIRE_PLUGIN
+#undef REQUIRE_EXTENSIONS
+#tryinclude <cURL>
+#tryinclude <socket>
+#tryinclude <steamtools>
+#tryinclude <SteamWorks>
+#tryinclude <updater>  // Comment out this line to remove updater support by force.
+#tryinclude <autoexecconfig>
+#define REQUIRE_PLUGIN
+#define REQUIRE_EXTENSIONS
+
+#define UPDATE_URL    "https://raw.githubusercontent.com/eyal282/SQLite-Bans/master/addons/updatefile.txt"
+
 #pragma newdecls required
 
-#define PLUGIN_VERSION "2.2"
+#define PLUGIN_VERSION "2.3"
 
 public Plugin myinfo = 
 {
@@ -354,7 +368,7 @@ public any BaseCommNative_SetClientMute(Handle plugin, int numParams)
 }
 
 public void OnPluginStart()
-{
+{	
 	LoadTranslations("common.phrases");
 	
 	RegAdminCmd("sm_ban", Command_Ban, ADMFLAG_BAN, "sm_ban <#userid|name> <minutes|0> [reason]");
@@ -408,13 +422,28 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_commstatus", Command_CommStatus, "Gives you information about communication penalties active on you");
 	RegConsoleCmd("sm_comms", Command_CommStatus, "Gives you information about communication penalties active on you");
 	
-	hcv_Website = CreateConVar("sqlite_bans_url", "http://yourwebsite.com", "Url to direct banned players to go to if they wish to appeal their ban");
-	hcv_LogMethod = CreateConVar("sqlite_bans_log_method", "1", "0 - Log in the painful to look at \"L20190412.log\" files. 1 - Log in a seperate file, in sourcemod/logs/SQLiteBans.log");
-	hcv_LogBannedConnects = CreateConVar("sqlite_bans_log_banned_connects", "0", "0 - Don't. 1 - Log whenever a banned player attempts to join the server");
-	hcv_DefaultGagTime = CreateConVar("sqlite_bans_default_gag_time", "7", "If a plugin uses a basecomm native to gag a player, this is how long the gag will last");
-	hcv_DefaultMuteTime = CreateConVar("sqlite_bans_default_mute_time", "7", "If a plugin uses a basecomm native to mute a player, this is how long the mute will last");
+	#if defined _autoexecconfig_included
 	
-	hcv_Deadtalk = CreateConVar("sm_deadtalk", "0", "Controls how dead communicate. 0 - Off. 1 - Dead players ignore teams. 2 - Dead players talk to living teammates.", 0, true, 0.0, true, 2.0);
+	AutoExecConfig_SetFile("SQLiteBans");
+	
+	#endif
+	
+	hcv_Website = UC_CreateConVar("sqlite_bans_url", "http://yourwebsite.com", "Url to direct banned players to go to if they wish to appeal their ban");
+	hcv_LogMethod = UC_CreateConVar("sqlite_bans_log_method", "1", "0 - Log in the painful to look at \"L20190412.log\" files. 1 - Log in a seperate file, in sourcemod/logs/SQLiteBans.log");
+	hcv_LogBannedConnects = UC_CreateConVar("sqlite_bans_log_banned_connects", "0", "0 - Don't. 1 - Log whenever a banned player attempts to join the server");
+	hcv_DefaultGagTime = UC_CreateConVar("sqlite_bans_default_gag_time", "7", "If a plugin uses a basecomm native to gag a player, this is how long the gag will last");
+	hcv_DefaultMuteTime = UC_CreateConVar("sqlite_bans_default_mute_time", "7", "If a plugin uses a basecomm native to mute a player, this is how long the mute will last");
+	
+	hcv_Deadtalk = UC_CreateConVar("sm_deadtalk", "0", "Controls how dead communicate. 0 - Off. 1 - Dead players ignore teams. 2 - Dead players talk to living teammates.", 0, true, 0.0, true, 2.0);
+	
+	#if defined _autoexecconfig_included
+	
+	AutoExecConfig_ExecuteFile();
+
+	AutoExecConfig_CleanFile();
+	
+	#endif
+	
 	hcv_Alltalk = FindConVar("sv_alltalk");
 	
 	HookConVarChange(hcv_Deadtalk, hcvChange_Deadtalk);
@@ -436,6 +465,32 @@ public void OnPluginStart()
 	SetFilePermissions(LogPath, FPERM_ULTIMATE); 
 	
 	ConnectToDatabase();
+	
+	#if defined _updater_included
+	if (LibraryExists("updater"))
+	{
+		Updater_AddPlugin(UPDATE_URL);
+	}
+	#endif
+}
+
+#if defined _updater_included
+public int Updater_OnPluginUpdated()
+{
+	ServerCommand("sm_reload_translations");
+	
+	ReloadPlugin(INVALID_HANDLE);
+}
+
+#endif
+public void OnLibraryAdded(const char[] name)
+{
+	#if defined _updater_included
+	if (StrEqual(name, "updater"))
+	{
+		Updater_AddPlugin(UPDATE_URL);
+	}
+	#endif
 }
 
 public void ConnectToDatabase()
@@ -2095,3 +2150,19 @@ stock int PositiveOrZero(int value)
 		
 	return value;
 }
+
+#if defined _autoexecconfig_included
+
+stock ConVar UC_CreateConVar(const char[] name, const char[] defaultValue, const char[] description = "", int flags = 0, bool hasMin = false, float min = 0.0, bool hasMax = false, float max = 0.0)
+{
+	return AutoExecConfig_CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
+}
+
+#else
+
+stock ConVar UC_CreateConVar(const char[] name, const char[] defaultValue, const char[] description = "", int flags = 0, bool hasMin = false, float min = 0.0, bool hasMax = false, float max = 0.0)
+{
+	return CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
+}
+ 
+#endif
