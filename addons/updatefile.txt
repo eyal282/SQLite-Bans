@@ -1,0 +1,18 @@
+"Information"
+{
+	"Version"
+	{
+		"Latest"	"4.9"
+	}
+	
+	"Notes"	"Removed errors from bad queries."
+}
+	
+"Files"
+{
+	"Plugin"	"Path_SM/plugins/UsefulCommands.smx"
+	"Plugin"	"Path_SM/translations/UsefulCommands.phrases.txt"
+	"Plugin"	"Path_SM/translations/ru/UsefulCommands.phrases.txt"
+	
+	"Source"	"Path_SM/scripting/UsefulCommands.sp"
+}
