@@ -20,7 +20,7 @@
 
 #pragma newdecls required
 
-#define PLUGIN_VERSION "2.3"
+#define PLUGIN_VERSION "2.4"
 
 public Plugin myinfo = 
 {
@@ -113,7 +113,7 @@ public any Native_CommPunishClient(Handle plugin, int numParams)
 		ThrowNativeError(SP_ERROR_NATIVE, "PenaltyType cannot be equal to Penalty_Ban ( %i )", Penalty_Ban);
 		return false;
 	}
-	else if(PenaltyType >= enPenaltyType)
+	else if (PenaltyType >= enPenaltyType_LENGTH)
 	{
 		ThrowNativeError(SP_ERROR_NATIVE, "Invalid PenaltyType");
 		return false;
@@ -156,7 +156,7 @@ public any Native_CommPunishIdentity(Handle plugin, int numParams)
 		ThrowNativeError(SP_ERROR_NATIVE, "PenaltyType cannot be equal to Penalty_Ban ( %i )", Penalty_Ban);
 		return false;
 	}
-	else if(PenaltyType >= enPenaltyType)
+	else if(PenaltyType >= enPenaltyType_LENGTH)
 	{
 		ThrowNativeError(SP_ERROR_NATIVE, "Invalid PenaltyType");
 		return false;
@@ -228,7 +228,7 @@ public any Native_CommUnpunishClient(Handle plugin, int numParams)
 		ThrowNativeError(SP_ERROR_NATIVE, "PenaltyType cannot be equal to Penalty_Ban ( %i )", Penalty_Ban);
 		return false;
 	}
-	else if(PenaltyType >= enPenaltyType)
+	else if(PenaltyType >= enPenaltyType_LENGTH)
 	{
 		ThrowNativeError(SP_ERROR_NATIVE, "Invalid PenaltyType");
 		return false;
@@ -258,7 +258,7 @@ public any Native_CommUnpunishIdentity(Handle plugin, int numParams)
 		ThrowNativeError(SP_ERROR_NATIVE, "PenaltyType cannot be equal to Penalty_Ban ( %i )", Penalty_Ban);
 		return false;
 	}
-	else if(PenaltyType >= enPenaltyType)
+	else if(PenaltyType >= enPenaltyType_LENGTH)
 	{
 		ThrowNativeError(SP_ERROR_NATIVE, "Invalid PenaltyType");
 		return false;
@@ -905,7 +905,7 @@ public void SQLCB_GetClientInfo(Handle db, Handle hndl, const char[] sError, int
 			}
 			default:
 			{
-				if(Penalty >= enPenaltyType)
+				if(Penalty >= enPenaltyType_LENGTH)
 					continue;
 
 				if(DurationMinutes == 0)
