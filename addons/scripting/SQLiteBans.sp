@@ -20,7 +20,7 @@
 
 #pragma newdecls required
 
-#define PLUGIN_VERSION "2.4"
+#define PLUGIN_VERSION "2.5"
 
 public Plugin myinfo = 
 {
@@ -1800,7 +1800,7 @@ public void QueryCommList(int client, int ItemPos)
 	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE DurationMinutes != 0 AND TimestampGiven + (60 * DurationMinutes) < %i", GetTime());
 	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 11);
 		
-	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty > %i AND Penalty < %i ORDER BY TimestampGiven DESC", Penalty_Ban, enPenaltyType); 
+	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty > %i AND Penalty < %i ORDER BY TimestampGiven DESC", Penalty_Ban, enPenaltyType_LENGTH); 
 	SQL_TQuery(dbLocal, SQLCB_CommList, sQuery, DP); 
 }
 
