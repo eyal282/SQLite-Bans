@@ -2,10 +2,10 @@
 {
 	"Version"
 	{
-		"Latest"	"2.3"
+		"Latest"	"2.5"
 	}
 	
-	"Notes"	"Added Updater Support"
+	"Notes"	"Fixed !commlist not working at all, always writing that there are no comm punishments active"
 }
 	
 "Files"
