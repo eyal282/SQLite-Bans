@@ -2,10 +2,10 @@
 {
 	"Version"
 	{
-		"Latest"	"2.5"
+		"Latest"	"2.6"
 	}
 	
-	"Notes"	"Fixed !commlist not working at all, always writing that there are no comm punishments active"
+	"Notes"	"Added special integration allowing support for my Ban Disconnected plugin"
 }
 	
 "Files"
