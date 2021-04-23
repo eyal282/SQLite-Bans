@@ -20,8 +20,65 @@
 
 #pragma newdecls required
 
-#define PLUGIN_VERSION "2.5"
+#define PLUGIN_VERSION "2.6"
 
+/**
+ * Bans a client.
+ *
+ * @param client		Client being banned.
+ * @param time			Time (in minutes) to ban (0 = permanent).
+ * @param flags			BANFLAG_AUTHID for an authid ban, BANFLAG_IP for an IP ban, BANFLAG_AUTO for a full ban. ( both IP and AuthId )
+ * 						If you added "|BANFLAG_NOKICK" on top of the first flag and kick_message is not null, SQLiteBans will handle the kick message
+ * 						and will kick the client.
+ * @param reason		Reason to ban the client for.
+ * @param kick_message	Message to display to the user when kicking. If you added "|BANFLAG_NOKICK" to the flags, change this to anything you want
+ *						and SQLiteBans will kick the client by itself ( must not be null, the actual value of kick_message doesn't matter at all )
+ * @param command		Command string to identify the source. If this is left empty the ban will fail and
+ *						the regular banning mechanism of the game will be used.
+ * @param source		The admin ( doesn't have to be an admin ) that is doing the banning
+ *						or 0 for console.
+ * @return				True on success, false on failure.
+ * @error				Invalid client index or client not in game.
+ * @note				In order to let SQLiteBans kick the client by itself, set kick_message to anything you want and add "|BANFLAG_NOKICK" to the flags you've set.
+ * @note				At the current version of 1.2, the param command has no meaning and it only mustn't be null.
+ */
+
+/*
+native bool BanClient(int client, 
+					  int time, 
+					  int flags, 
+					  const char[] reason, 
+					  const char[] kick_message="", 
+					  const char[] command="",
+					  any source=0);
+
+*/
+
+/**
+ * Bans an identity (either an IP address or auth string).
+ *
+ * @param identity		String to ban (ip or authstring).
+ * @param time			Time to ban for (0 = permanent).
+ * @param flags			BANFLAG_AUTHID if the identity is an AuthId, BANFLAG_IP if the identity is an IP Address, BANFLAG_AUTO for full ban, identity is either and must check notes
+ * @param reason		Ban reason string.
+ * @param command		Command string to identify the source. If this is left empty the ban will fail and
+ *						the regular banning mechanism of the game will be used.
+ * @param source		The admin ( doesn't have to be an admin ) that is doing the banning
+ *						or 0 for console.
+ * @return				True on success, false on failure.
+ * @note				At the current version of 1.2, the param command has no meaning and it only mustn't be null.
+ * @note 				If flags are set to BANFLAG_AUTO, you must call the forward SQLiteBans_OnBanIdentity and edit both AuthId & IPAddress
+ */
+
+/*
+native bool BanIdentity(const char[] identity, 
+						int time, 
+						int flags, 
+						const char[] reason,
+						const char[] command="",
+						any source=0);
+
+*/
 public Plugin myinfo = 
 {
 	name = "SQLite Bans",
@@ -61,6 +118,8 @@ Handle hcv_DefaultMuteTime = INVALID_HANDLE;
 Handle hcv_Deadtalk = INVALID_HANDLE;
 Handle hcv_Alltalk = INVALID_HANDLE;
 
+Handle fw_OnBanIdentity = INVALID_HANDLE;
+
 float ExpireBreach = 0.0;
 
 // Unix, setting to -1 makes it permanent.
@@ -83,6 +142,7 @@ public APLRes AskPluginLoad2(Handle myself, bool bLate, char[] error, int err_ma
 	CreateNative("BaseComm_SetClientMute",  BaseCommNative_SetClientMute);
 	
 	RegPluginLibrary("basecomm");
+	RegPluginLibrary("SQLiteBans");
 }
 
 public any Native_CommPunishClient(Handle plugin, int numParams)
@@ -378,6 +438,15 @@ public void OnPluginStart()
 	RegAdminCmd("sm_addban", Command_AddBan, ADMFLAG_BAN, "sm_addban <steamid|ip> <minutes|0> [reason]");
 	RegAdminCmd("sm_unban", Command_Unban, ADMFLAG_UNBAN, "sm_unban <steamid|ip>");
 	
+	// flags = ban flags
+	// identity = identity that is getting banned.
+	// AuthId = copyback of authid to ban. Only used with flags & BANFLAG_AUTO
+	// IPAddress = copyback of IP to ban. Only used with flags & BANFLAG_AUTO
+	// Name = Player's name to ban
+	// @noreturn
+	// public void SQLiteBans_OnBanIdentity(int flags, const char identity[35], char AuthId[35], char IPAddress[32], char Name[64])
+	fw_OnBanIdentity = CreateGlobalForward("SQLiteBans_OnBanIdentity", ET_Ignore, Param_Cell, Param_String, Param_String, Param_String, Param_String);
+	
 	if(!CommandExists("sm_gag"))
 		RegAdminCmd("sm_gag", Command_Null, ADMFLAG_CHAT, "sm_gag <#userid|name> <minutes|0> [reason]");
 
@@ -665,12 +734,33 @@ public Action OnBanIdentity(const char[] identity, int time, int flags, const ch
 	
 	int UnixTime = GetTime();
 	
-	if(flags & BANFLAG_IP)
-		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "INSERT OR IGNORE INTO SQLiteBans_players (IPAddress, PlayerName, AdminAuthID, AdminName, Penalty, PenaltyReason, TimestampGiven, DurationMinutes) VALUES ('%s', '%s', '%s', '%s',  %i, '%s', %i, %i)", identity, "", AdminAuthId, AdminName, Penalty_Ban, reason, UnixTime, time);
-		
+	char AuthId[35];
+	char IPAddress[32];
+	char Name[64];
+	
+	Call_StartForward(fw_OnBanIdentity);
+	
+	Call_PushCell(flags);
+	Call_PushString(identity);
+	
+	Call_PushStringEx(AuthId, sizeof(AuthId), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(IPAddress, sizeof(IPAddress), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(Name, sizeof(Name), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	
+	Call_Finish();
+	
+	if(flags & BANFLAG_AUTO && (AuthId[0] == EOS || IPAddress[0] == EOS))
+		return Plugin_Continue;
+	
+	else if(flags & BANFLAG_AUTO)
+			SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "INSERT OR IGNORE INTO SQLiteBans_players (AuthId, IPAddress, PlayerName, AdminAuthID, AdminName, Penalty, PenaltyReason, TimestampGiven, DurationMinutes) VALUES ('%s', '%s', '%s', '%s', '%s',  %i, '%s', %i, %i)", AuthId, IPAddress, Name, AdminAuthId, AdminName, Penalty_Ban, reason, UnixTime, time);
+			
+	else if(flags & BANFLAG_IP)
+		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "INSERT OR IGNORE INTO SQLiteBans_players (IPAddress, PlayerName, AdminAuthID, AdminName, Penalty, PenaltyReason, TimestampGiven, DurationMinutes) VALUES ('%s', '%s', '%s', '%s',  %i, '%s', %i, %i)", identity, Name, AdminAuthId, AdminName, Penalty_Ban, reason, UnixTime, time);
+	
 	else if(flags & BANFLAG_AUTHID)
-		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "INSERT OR IGNORE INTO SQLiteBans_players (AuthId, PlayerName, AdminAuthID, AdminName, Penalty, PenaltyReason, TimestampGiven, DurationMinutes) VALUES ('%s', '%s', '%s', '%s',  %i, '%s', %i, %i)", identity, "", AdminAuthId, AdminName, Penalty_Ban, reason, UnixTime, time);
-		
+		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "INSERT OR IGNORE INTO SQLiteBans_players (AuthId, PlayerName, AdminAuthID, AdminName, Penalty, PenaltyReason, TimestampGiven, DurationMinutes) VALUES ('%s', '%s', '%s', '%s',  %i, '%s', %i, %i)", identity, Name, AdminAuthId, AdminName, Penalty_Ban, reason, UnixTime, time);
+	
 	else
 		return Plugin_Continue;
 	
