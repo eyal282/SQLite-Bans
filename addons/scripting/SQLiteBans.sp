@@ -20,7 +20,7 @@
 
 #pragma newdecls required
 
-#define PLUGIN_VERSION "2.6"
+#define PLUGIN_VERSION "2.7"
 
 /**
  * Bans a client.
@@ -1472,9 +1472,17 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 	
 	TargetClient = target_list[0];
 	
-	bool Extended = !(ExpirePenalty[TargetClient][PenaltyType] == 0);
+	int Expire;
+	bool Extended; // Fix with IsClientChatGagged
+	
+	if(PenaltyType == Penalty_Mute || PenaltyType == Penalty_Silence)
+		Extended = IsClientVoiceMuted(client, Expire);
+	
+	else if(PenaltyType == Penalty_Gag)
+		Extended = IsClientChatGagged(client, Expire);
+		
 
-	if(ExpirePenalty[TargetClient][PenaltyType] == -1)
+	if(Expire == -1)
 	{
 		ReplyToCommand(client, "[SM] Cannot extend penalty on a permanently %s client.", PenaltyAlias);
 		return Plugin_Stop;
