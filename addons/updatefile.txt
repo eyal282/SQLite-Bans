@@ -2,10 +2,10 @@
 {
 	"Version"
 	{
-		"Latest"	"2.6"
+		"Latest"	"2.7"
 	}
 	
-	"Notes"	"Added special integration allowing support for my Ban Disconnected plugin"
+	"Notes"	"Fixed bug that treated expired comms as active ones, causing new comms to be added with minus"
 }
 	
 "Files"
