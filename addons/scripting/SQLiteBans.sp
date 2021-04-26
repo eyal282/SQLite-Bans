@@ -20,7 +20,7 @@
 
 #pragma newdecls required
 
-#define PLUGIN_VERSION "2.7"
+#define PLUGIN_VERSION "2.8"
 
 /**
  * Bans a client.
@@ -106,7 +106,7 @@ native bool SQLiteBans_CommPunishClient(int client, enPenaltyType PenaltyType, i
 native bool SQLiteBans_CommPunishIdentity(const char[] identity, enPenaltyType PenaltyType, const char[] name, int time, const char[] reason, int source, bool dontExtend);
 
 native bool SQLiteBans_CommUnpunishClient(int client, enPenaltyType PenaltyType, int source);
-native bool SQLiteBans_CommUnpunishIdentity(const char[] identity, enPenaltyType PenaltyType, int source);
+native bool SQLiteBans_CommUnpunishIdentity(const char[] identity, enPenaltyType PenaltyType, int source, const char[] name);
 
 Handle dbLocal = INVALID_HANDLE;
 
@@ -160,11 +160,26 @@ public any Native_CommPunishClient(Handle plugin, int numParams)
 	
 	bool dontExtend = GetNativeCell(6);
 	
-	char AuthId[35];
+	char AuthId[35], IPAddress[32];
+	
+	GetClientIP(client, IPAddress, sizeof(IPAddress), true);
 	
 	if(!GetClientAuthId(client, AuthId_Engine, AuthId, sizeof(AuthId)))
 		return false;
 		
+	char AdminAuthId[35], AdminName[64];
+	
+	if(source == 0)
+	{
+		AdminAuthId = "CONSOLE";
+		AdminName = "CONSOLE";
+	}
+	else
+	{
+		GetClientAuthId(source, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+		GetClientName(source, AdminName, sizeof(AdminName));
+	}
+	
 	char name[64];
 	GetClientName(client, name, sizeof(name));
 		
@@ -200,6 +215,10 @@ public any Native_CommPunishClient(Handle plugin, int numParams)
 	else
 		SetClientListeningFlags(client, VOICE_NORMAL);
 	
+	char PenaltyAlias[32];
+	
+	PenaltyAliasByType(PenaltyType, PenaltyAlias);
+		
 	return SQLiteBans_CommPunishIdentity(AuthId, PenaltyType, name, time, reason, source, dontExtend);
 }
 
@@ -267,6 +286,17 @@ public any Native_CommPunishIdentity(Handle plugin, int numParams)
 		SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 3);
 	}
 	
+	
+	char PenaltyAlias[32];
+	
+	PenaltyAliasByType(PenaltyType, PenaltyAlias, false);
+	
+	if(time == 0)
+		LogSQLiteBans("Admin %N [AuthId: %s] added a permanent %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, PenaltyAlias, name, identity, reason);
+
+	else
+		LogSQLiteBans("Admin %N [AuthId: %s] added a %i minute %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, time, PenaltyAlias, name, identity, reason);
+	
 	return true;
 }
 
@@ -278,8 +308,21 @@ public any Native_CommUnpunishClient(Handle plugin, int numParams)
 	
 	int source = GetNativeCell(3);
 	
-	char AuthId[35];
+	char AuthId[35], name[64];
 	
+	char AdminAuthId[35], AdminName[64];
+	
+	GetClientName(client, name, sizeof(name));
+	if(source == 0)
+	{
+		AdminAuthId = "CONSOLE";
+		AdminName = "CONSOLE";
+	}
+	else
+	{
+		GetClientAuthId(source, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+		GetClientName(source, AdminName, sizeof(AdminName));
+	}
 	if(!GetClientAuthId(client, AuthId_Engine, AuthId, sizeof(AuthId)))
 		return false;
 		
@@ -302,7 +345,13 @@ public any Native_CommUnpunishClient(Handle plugin, int numParams)
 	else
 		SetClientListeningFlags(client, VOICE_NORMAL);
 	
-	return SQLiteBans_CommUnpunishIdentity(AuthId, PenaltyType, source);
+	char PenaltyAlias[32];
+	
+	PenaltyAliasByType(PenaltyType, PenaltyAlias);
+	
+	LogSQLiteBans("Admin %N [AuthId: %s] un%s %N [AuthId: %s].", source, AdminAuthId, PenaltyAlias, client, AuthId);
+		
+	return SQLiteBans_CommUnpunishIdentity(AuthId, PenaltyType, source, name);
 }
 
 
@@ -324,12 +373,21 @@ public any Native_CommUnpunishIdentity(Handle plugin, int numParams)
 		return false;
 	}
 	
-	//new source = GetNativeCell(3);
+	int source = GetNativeCell(3);
+	int UserId = (source == 0 ? 0 : GetClientUserId(source));
+	
+	char name[64];
+	GetNativeString(4, name, sizeof(name));
+	
+	Handle DP = CreateDataPack();
+	
+	WritePackCell(DP, UserId);
+	WritePackCell(DP, GetCmdReplySource());
+	WritePackString(DP, identity);
 	
 	char sQuery[1024];
 	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE Penalty = %i AND AuthId = '%s'", PenaltyType, identity);
-	
-	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 4);
+	SQL_TQuery(dbLocal, SQLCB_Unpenalty, sQuery, DP);
 	
 	return true;
 }
@@ -704,9 +762,14 @@ public Action OnBanClient(int client, int time, int flags, const char[] reason, 
 		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "INSERT OR IGNORE INTO SQLiteBans_players (AuthId, PlayerName, AdminAuthID, AdminName, Penalty, PenaltyReason, TimestampGiven, DurationMinutes) VALUES ('%s', '%s', '%s', '%s',  %i, '%s', %i, %i)", AuthId, Name, AdminAuthId, AdminName, Penalty_Ban, reason, UnixTime, time);
 		
 	else
-		return Plugin_Continue;
+		return Plugin_Continue;	
 	
-	LogSQLiteBans("Admin %s [AuthId: %s] banned %s permanently ([AuthId: %s],[IP: %s]). Reason: %s", AdminName, AdminAuthId, client, AuthId, IPAddress, reason);
+	if(time == 0)
+		LogSQLiteBans("Admin %N [AuthId: %s] banned %N permanently ([AuthId: %s],[IP: %s]). Reason: %s", source, AdminAuthId, client, AuthId, IPAddress, reason);
+
+	else
+		LogSQLiteBans("Admin %N [AuthId: %s] banned %N for %i minutes ([AuthId: %s],[IP: %s]). Reason: %s", source, AdminAuthId, client, time, AuthId, IPAddress, reason);
+		
 	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 7);
 	
 	if(kick_message[0] != EOS && flags & BANFLAG_NOKICK)
@@ -765,7 +828,13 @@ public Action OnBanIdentity(const char[] identity, int time, int flags, const ch
 		return Plugin_Continue;
 	
 	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 8);
-	
+
+	if(time == 0)
+		LogSQLiteBans("Admin %N [AuthId: %s] added a permanent ban on identity %s. Reason: %s", source, AdminAuthId, identity, reason);
+
+	else
+		LogSQLiteBans("Admin %N [AuthId: %s] added a %i minute ban on identity %s. Reason: %s", source, AdminAuthId, time, identity, reason);
+		
 	return Plugin_Handled;
 }
 
@@ -1089,15 +1158,11 @@ public Action Command_Ban(int client, int args)
 	GetClientAuthId(client, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
 	
 	if(Duration == 0)
-	{
 		ShowActivity2(client, "[SM] ", "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
-		LogSQLiteBans("Admin %N [AuthId: %s] banned %N permanently ([AuthId: %s],[IP: %s]). Reason: %s", client, AdminAuthId, TargetClient, AuthId, IPAddress, BanReason);
-	}
+
 	else
-	{
 		ShowActivity2(client, "[SM] ", "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
-		LogSQLiteBans("Admin %N [AuthId: %s] banned %N for %i minutes ([AuthId: %s],[IP: %s]). Reason: %s", client, AdminAuthId, TargetClient, Duration, AuthId, IPAddress, BanReason);
-	}
+		
 	return Plugin_Handled;
 }
 
@@ -1167,15 +1232,11 @@ public Action Command_BanIP(int client, int args)
 	GetClientAuthId(client, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
 	
 	if(Duration == 0)
-	{
 		ShowActivity2(client, "[SM] ", "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
-		LogSQLiteBans("Admin %N [AuthId: %s] IP banned %N permanently ([AuthId: %s],[IP: %s]). Reason: %s", client, AdminAuthId, TargetClient, AuthId, IPAddress, BanReason);
-	}
+
 	else
-	{
 		ShowActivity2(client, "[SM] ", "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
-		LogSQLiteBans("Admin %N [AuthId: %s] IP banned %N for %i minutes ([AuthId: %s],[IP: %s]). Reason: %s", client, AdminAuthId, TargetClient, Duration, AuthId, IPAddress, BanReason);
-	}
+
 	
 	return Plugin_Handled;
 }
@@ -1252,17 +1313,7 @@ public Action Command_FullBan(int client, int args)
 	GetClientIP(TargetClient, IPAddress, sizeof(IPAddress), true);
 	GetClientAuthId(TargetClient, AuthId_Engine, AuthId, sizeof(AuthId));
 	GetClientAuthId(client, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
-	
-	if(Duration == 0)
-	{
-		ShowActivity2(client, "[SM] ", "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
-		LogSQLiteBans("Admin %N [AuthId: %s] fully banned %N permanently ([AuthId: %s],[IP: %s]). Reason: %s", client, AdminAuthId, TargetClient, AuthId, IPAddress, BanReason);
-	}
-	else
-	{
-		ShowActivity2(client, "[SM] ", "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
-		LogSQLiteBans("Admin %N [AuthId: %s] fully banned %N for %i minutes ([AuthId: %s],[IP: %s]). Reason: %s", client, AdminAuthId, TargetClient, Duration, AuthId, IPAddress, BanReason);
-	}
+
 	
 	return Plugin_Handled;
 }
@@ -1317,15 +1368,10 @@ public Action Command_AddBan(int client, int args)
 		GetClientAuthId(client, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
 
 	if(Duration == 0)
-	{
 		ShowActivity2(client, "[SM] ", "added a permanent ban on identity %s. Reason: %s", TargetArg, BanReason);
-		LogSQLiteBans("Admin %N [AuthId: %s] added a permanent ban on identity %s. Reason: %s", client, AdminAuthId, TargetArg, BanReason);
-	}
+
 	else
-	{
 		ShowActivity2(client, "[SM] ", "added a %i minute ban on identity: %s", Duration, BanReason);
-		LogSQLiteBans("Admin %N [AuthId: %s] added a %i minute ban on identity. Reason: %s", client, AdminAuthId, Duration, TargetArg);
-	}	
 
 	return Plugin_Handled;
 }
@@ -2220,7 +2266,7 @@ stock void LogSQLiteBans(const char[] format, any ...)
 	VFormat(buffer, sizeof(buffer), format, 2);
 	
 	if(GetConVarBool(hcv_LogMethod))
-		LogToFile(FilePath, buffer);
+		LogToFileEx(FilePath, buffer);
 		
 	else
 		LogMessage(buffer);
@@ -2235,12 +2281,27 @@ stock void LogSQLiteBans_BannedConnect(const char[] format, any ...)
 	VFormat(buffer, sizeof(buffer), format, 2);
 	
 	if(GetConVarBool(hcv_LogMethod))
-		LogToFile(FilePath, buffer);
+		LogToFileEx(FilePath, buffer);
 		
 	else
 		LogMessage(buffer);
 }
 
+
+stock void LogSQLiteBans_Comms(const char[] format, any ...)
+{
+	char FilePath[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, FilePath, sizeof(FilePath), "logs/SQLiteBans/CommPlayers.log");
+
+	char buffer[1024];
+	VFormat(buffer, sizeof(buffer), format, 2);
+	
+	if(GetConVarBool(hcv_LogMethod))
+		LogToFileEx(FilePath, buffer);
+		
+	else
+		LogMessage(buffer);
+}
 stock int PositiveOrZero(int value)
 {
 	if(value < 0)
@@ -2264,3 +2325,25 @@ stock ConVar UC_CreateConVar(const char[] name, const char[] defaultValue, const
 }
  
 #endif
+
+stock void PenaltyAliasByType(enPenaltyType PenaltyType, char PenaltyAlias[32], bool bPast = true)
+{
+	if(bPast)
+	{
+		switch(PenaltyType)
+		{
+			case Penalty_Gag: PenaltyAlias = "gagged";
+			case Penalty_Mute: PenaltyAlias = "muted";
+			case Penalty_Silence: PenaltyAlias = "silenced";
+		}
+	}
+	else
+	{
+		switch(PenaltyType)
+		{
+			case Penalty_Gag: PenaltyAlias = "gag";
+			case Penalty_Mute: PenaltyAlias = "mute";
+			case Penalty_Silence: PenaltyAlias = "silence";
+		}
+	}
+}
