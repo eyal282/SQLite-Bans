@@ -2,10 +2,12 @@
 {
 	"Version"
 	{
-		"Latest"	"2.7"
+		"Latest"	"2.8"
 	}
 	
-	"Notes"	"Fixed bug that treated expired comms as active ones, causing new comms to be added with minus"
+	"Notes"	"Fixed double ban logging bug"
+	"Notes"	"Added logs for comms"
+	"Notes"	"Removed [SQLiteBans.smx] from logging."
 }
 	
 "Files"
