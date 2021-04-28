@@ -2,7 +2,7 @@
 {
 	"Version"
 	{
-		"Latest"	"2.9"
+		"Latest"	"3.0"
 	}
 	
 	"Notes"	"Added integration to silence disconnected players via my ban disconnected plugin"
