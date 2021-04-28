@@ -4,7 +4,6 @@
 #include <basecomm>
 #include <adminmenu>
 
-
 #undef REQUIRE_PLUGIN
 #undef REQUIRE_EXTENSIONS
 #tryinclude <cURL>
@@ -16,69 +15,15 @@
 #define REQUIRE_PLUGIN
 #define REQUIRE_EXTENSIONS
 
+#include <sqlitebans>
+
 #define UPDATE_URL    "https://raw.githubusercontent.com/eyal282/SQLite-Bans/master/addons/updatefile.txt"
 
 #pragma newdecls required
 
 #define PLUGIN_VERSION "2.8"
 
-/**
- * Bans a client.
- *
- * @param client		Client being banned.
- * @param time			Time (in minutes) to ban (0 = permanent).
- * @param flags			BANFLAG_AUTHID for an authid ban, BANFLAG_IP for an IP ban, BANFLAG_AUTO for a full ban. ( both IP and AuthId )
- * 						If you added "|BANFLAG_NOKICK" on top of the first flag and kick_message is not null, SQLiteBans will handle the kick message
- * 						and will kick the client.
- * @param reason		Reason to ban the client for.
- * @param kick_message	Message to display to the user when kicking. If you added "|BANFLAG_NOKICK" to the flags, change this to anything you want
- *						and SQLiteBans will kick the client by itself ( must not be null, the actual value of kick_message doesn't matter at all )
- * @param command		Command string to identify the source. If this is left empty the ban will fail and
- *						the regular banning mechanism of the game will be used.
- * @param source		The admin ( doesn't have to be an admin ) that is doing the banning
- *						or 0 for console.
- * @return				True on success, false on failure.
- * @error				Invalid client index or client not in game.
- * @note				In order to let SQLiteBans kick the client by itself, set kick_message to anything you want and add "|BANFLAG_NOKICK" to the flags you've set.
- * @note				At the current version of 1.2, the param command has no meaning and it only mustn't be null.
- */
 
-/*
-native bool BanClient(int client, 
-					  int time, 
-					  int flags, 
-					  const char[] reason, 
-					  const char[] kick_message="", 
-					  const char[] command="",
-					  any source=0);
-
-*/
-
-/**
- * Bans an identity (either an IP address or auth string).
- *
- * @param identity		String to ban (ip or authstring).
- * @param time			Time to ban for (0 = permanent).
- * @param flags			BANFLAG_AUTHID if the identity is an AuthId, BANFLAG_IP if the identity is an IP Address, BANFLAG_AUTO for full ban, identity is either and must check notes
- * @param reason		Ban reason string.
- * @param command		Command string to identify the source. If this is left empty the ban will fail and
- *						the regular banning mechanism of the game will be used.
- * @param source		The admin ( doesn't have to be an admin ) that is doing the banning
- *						or 0 for console.
- * @return				True on success, false on failure.
- * @note				At the current version of 1.2, the param command has no meaning and it only mustn't be null.
- * @note 				If flags are set to BANFLAG_AUTO, you must call the forward SQLiteBans_OnBanIdentity and edit both AuthId & IPAddress
- */
-
-/*
-native bool BanIdentity(const char[] identity, 
-						int time, 
-						int flags, 
-						const char[] reason,
-						const char[] command="",
-						any source=0);
-
-*/
 public Plugin myinfo = 
 {
 	name = "SQLite Bans",
@@ -89,24 +34,6 @@ public Plugin myinfo =
 }
 
 #define FPERM_ULTIMATE (FPERM_U_READ|FPERM_U_WRITE|FPERM_U_EXEC|FPERM_G_READ|FPERM_G_WRITE|FPERM_G_EXEC|FPERM_O_READ|FPERM_O_WRITE|FPERM_O_EXEC)
-
-enum enPenaltyType
-{
-	Penalty_Ban = 0,
-	Penalty_Gag,
-	Penalty_Mute,
-	Penalty_Silence,
-	enPenaltyType_LENGTH
-}
-
-// returns false if client cannot be authenticated ( GetClientAuthId ) or if requires penalty extension with dontExtend set to true.
-native bool SQLiteBans_CommPunishClient(int client, enPenaltyType PenaltyType, int time, const char[] reason, int source, bool dontExtend);
-
-// always returns true unless you gave an invalid penalty type, which will result in a native error.
-native bool SQLiteBans_CommPunishIdentity(const char[] identity, enPenaltyType PenaltyType, const char[] name, int time, const char[] reason, int source, bool dontExtend);
-
-native bool SQLiteBans_CommUnpunishClient(int client, enPenaltyType PenaltyType, int source);
-native bool SQLiteBans_CommUnpunishIdentity(const char[] identity, enPenaltyType PenaltyType, int source, const char[] name);
 
 Handle dbLocal = INVALID_HANDLE;
 
@@ -119,6 +46,7 @@ Handle hcv_Deadtalk = INVALID_HANDLE;
 Handle hcv_Alltalk = INVALID_HANDLE;
 
 Handle fw_OnBanIdentity = INVALID_HANDLE;
+Handle fw_OnBanIdentity_Post = INVALID_HANDLE;
 
 float ExpireBreach = 0.0;
 
@@ -164,7 +92,7 @@ public any Native_CommPunishClient(Handle plugin, int numParams)
 	
 	GetClientIP(client, IPAddress, sizeof(IPAddress), true);
 	
-	if(!GetClientAuthId(client, AuthId_Engine, AuthId, sizeof(AuthId)))
+	if(!GetClientAuthId(client, AuthId_Steam2, AuthId, sizeof(AuthId)))
 		return false;
 		
 	char AdminAuthId[35], AdminName[64];
@@ -176,7 +104,7 @@ public any Native_CommPunishClient(Handle plugin, int numParams)
 	}
 	else
 	{
-		GetClientAuthId(source, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+		GetClientAuthId(source, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 		GetClientName(source, AdminName, sizeof(AdminName));
 	}
 	
@@ -262,7 +190,7 @@ public any Native_CommPunishIdentity(Handle plugin, int numParams)
 	}
 	else
 	{
-		GetClientAuthId(source, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+		GetClientAuthId(source, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 		GetClientName(source, AdminName, sizeof(AdminName));
 	}
 	
@@ -320,10 +248,10 @@ public any Native_CommUnpunishClient(Handle plugin, int numParams)
 	}
 	else
 	{
-		GetClientAuthId(source, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+		GetClientAuthId(source, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 		GetClientName(source, AdminName, sizeof(AdminName));
 	}
-	if(!GetClientAuthId(client, AuthId_Engine, AuthId, sizeof(AuthId)))
+	if(!GetClientAuthId(client, AuthId_Steam2, AuthId, sizeof(AuthId)))
 		return false;
 		
 	else if(PenaltyType == Penalty_Ban)
@@ -496,14 +424,9 @@ public void OnPluginStart()
 	RegAdminCmd("sm_addban", Command_AddBan, ADMFLAG_BAN, "sm_addban <steamid|ip> <minutes|0> [reason]");
 	RegAdminCmd("sm_unban", Command_Unban, ADMFLAG_UNBAN, "sm_unban <steamid|ip>");
 	
-	// flags = ban flags
-	// identity = identity that is getting banned.
-	// AuthId = copyback of authid to ban. Only used with flags & BANFLAG_AUTO
-	// IPAddress = copyback of IP to ban. Only used with flags & BANFLAG_AUTO
-	// Name = Player's name to ban
-	// @noreturn
-	// public void SQLiteBans_OnBanIdentity(int flags, const char identity[35], char AuthId[35], char IPAddress[32], char Name[64])
 	fw_OnBanIdentity = CreateGlobalForward("SQLiteBans_OnBanIdentity", ET_Ignore, Param_Cell, Param_String, Param_String, Param_String, Param_String);
+	fw_OnBanIdentity_Post = CreateGlobalForward("SQLiteBans_OnBanIdentity_Post", ET_Ignore, Param_String, Param_String, Param_String, Param_String, Param_String, Param_Cell);
+
 	
 	if(!CommandExists("sm_gag"))
 		RegAdminCmd("sm_gag", Command_Null, ADMFLAG_CHAT, "sm_gag <#userid|name> <minutes|0> [reason]");
@@ -719,7 +642,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 			PrintToChat(client, "You have been gagged. It will never expire");
 		
 		else
-			PrintToChat(client, "You have been gagged. It will expire in %i minutes", ((Expire - GetTime()) / 60) + 1);
+			PrintToChat(client, "You have been gagged. It will expire in %i minutes", RoundToFloor((float((Expire - GetTime())) / 60.0) - 0.1) + 1);
 			
 		return Plugin_Stop;
 	}
@@ -736,7 +659,7 @@ public Action OnBanClient(int client, int time, int flags, const char[] reason, 
 	char sQuery[1024];
 	
 	char AuthId[35], IPAddress[32], Name[64], AdminAuthId[35], AdminName[64];
-	GetClientAuthId(client, AuthId_Engine, AuthId, sizeof(AuthId));
+	GetClientAuthId(client, AuthId_Steam2, AuthId, sizeof(AuthId));
 	GetClientIP(client, IPAddress, sizeof(IPAddress), true);
 	GetClientName(client, Name, sizeof(Name));
 	
@@ -747,7 +670,7 @@ public Action OnBanClient(int client, int time, int flags, const char[] reason, 
 	}
 	else
 	{
-		GetClientAuthId(source, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+		GetClientAuthId(source, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 		GetClientName(source, AdminName, sizeof(AdminName));
 	}
 	int UnixTime = GetTime();
@@ -769,12 +692,25 @@ public Action OnBanClient(int client, int time, int flags, const char[] reason, 
 
 	else
 		LogSQLiteBans("Admin %N [AuthId: %s] banned %N for %i minutes ([AuthId: %s],[IP: %s]). Reason: %s", source, AdminAuthId, client, time, AuthId, IPAddress, reason);
-		
-	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 7);
+	
+	Handle DP = CreateDataPack();
+	
+	WritePackCell(DP, GetEntityUserId(source));
+	
+	WritePackString(DP, AuthId);
+	WritePackString(DP, Name);
+	WritePackString(DP, AdminAuthId);
+	WritePackString(DP, AdminName);
+	WritePackString(DP, reason);
+	
+	WritePackCell(DP, time);
+	
+	SQL_TQuery(dbLocal, SQLCB_IdentityBanned, sQuery, DP);
 	
 	if(kick_message[0] != EOS && flags & BANFLAG_NOKICK)
+	{
 		KickBannedClient(client, time, AdminName, reason, UnixTime);
-	
+	}
 	return Plugin_Handled;
 }
 
@@ -791,7 +727,7 @@ public Action OnBanIdentity(const char[] identity, int time, int flags, const ch
 	}
 	else
 	{
-		GetClientAuthId(source, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+		GetClientAuthId(source, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 		GetClientName(source, AdminName, sizeof(AdminName));
 	}
 	
@@ -826,8 +762,20 @@ public Action OnBanIdentity(const char[] identity, int time, int flags, const ch
 	
 	else
 		return Plugin_Continue;
+		
+	Handle DP = CreateDataPack();
 	
-	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 8);
+	WritePackCell(DP, GetEntityUserId(source));
+	
+	WritePackString(DP, AuthId);
+	WritePackString(DP, Name);
+	WritePackString(DP, AdminAuthId);
+	WritePackString(DP, AdminName);
+	WritePackString(DP, reason);
+	
+	WritePackCell(DP, time);
+	
+	SQL_TQuery(dbLocal, SQLCB_IdentityBanned, sQuery, DP);
 
 	if(time == 0)
 		LogSQLiteBans("Admin %N [AuthId: %s] added a permanent ban on identity %s. Reason: %s", source, AdminAuthId, identity, reason);
@@ -838,6 +786,51 @@ public Action OnBanIdentity(const char[] identity, int time, int flags, const ch
 	return Plugin_Handled;
 }
 
+public void SQLCB_IdentityBanned(Handle db, Handle hndl, const char[] sError, Handle DP)
+{
+	
+	if(hndl == null)
+		ThrowError(sError);
+    
+	ResetPack(DP);
+	
+	int source = GetEntityOfUserId(ReadPackCell(DP));
+	
+	char AuthId[35], Name[64], AdminAuthId[35], AdminName[64], reason[256];
+	
+	ReadPackString(DP, AuthId, sizeof(AuthId));
+	ReadPackString(DP, Name, sizeof(Name));
+	ReadPackString(DP, AdminAuthId, sizeof(AdminAuthId));
+	ReadPackString(DP, AdminName, sizeof(AdminName));
+	ReadPackString(DP, reason, sizeof(reason));
+	
+	int time = ReadPackCell(DP);
+	
+	CloseHandle(DP);
+	
+	if(SQL_GetAffectedRows(hndl) == 0)
+	{
+		ReplyToCommand(source, "Target %s is already banned!", Name);
+		
+		return;
+	}
+	
+	Call_StartForward(fw_OnBanIdentity_Post);
+	
+	Call_PushString(AuthId);
+
+	Call_PushString(Name);
+	
+	Call_PushString(AdminAuthId);
+	Call_PushString(AdminName);
+	
+	Call_PushString(reason);
+	
+	Call_PushCell(time);
+	
+	Call_Finish();
+	
+}
 public Action Event_PlayerSpawn(Handle hEvent, const char[] Name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(GetEventInt(hEvent, "userid"));
@@ -959,7 +952,7 @@ public void OnClientPostAdminCheck(int client)
 
 	char AuthId[35];
 	
-	if(!GetClientAuthId(client, AuthId_Engine, AuthId, sizeof(AuthId)))
+	if(!GetClientAuthId(client, AuthId_Steam2, AuthId, sizeof(AuthId)))
 		CreateTimer(5.0, Timer_Auth, GetClientUserId(client), TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
 	else
 		FindClientPenalties(client);
@@ -970,7 +963,7 @@ public Action Timer_Auth(Handle timer, int UserId)
 	int client = GetClientOfUserId(UserId);
 	
 	char AuthId[35]
-	if(!GetClientAuthId(client, AuthId_Engine, AuthId, sizeof AuthId))
+	if(!GetClientAuthId(client, AuthId_Steam2, AuthId, sizeof AuthId))
 		return Plugin_Continue;
 		
 	else
@@ -992,7 +985,7 @@ void FindClientPenalties(int client)
 		
 	bool GotAuthId;
 	char AuthId[35], IPAddress[32];
-	GotAuthId = GetClientAuthId(client, AuthId_Engine, AuthId, sizeof(AuthId));
+	GotAuthId = GetClientAuthId(client, AuthId_Steam2, AuthId, sizeof(AuthId));
 	GetClientIP(client, IPAddress, sizeof(IPAddress), true);
 	
 	char sQuery[256];
@@ -1046,7 +1039,7 @@ public void SQLCB_GetClientInfo(Handle db, Handle hndl, const char[] sError, int
 				SQL_FetchString(hndl, 6, BanReason, sizeof(BanReason));
 				
 				char AuthId[35], IPAddress[32];
-				GetClientAuthId(client, AuthId_Engine, AuthId, sizeof(AuthId));
+				GetClientAuthId(client, AuthId_Steam2, AuthId, sizeof(AuthId));
 				GetClientIP(client, IPAddress, sizeof(IPAddress), true);
 				
 				if(GetConVarBool(hcv_LogBannedConnects))
@@ -1154,8 +1147,8 @@ public Action Command_Ban(int client, int args)
 	
 	char AuthId[35], AdminAuthId[35], IPAddress[32];
 	GetClientIP(TargetClient, IPAddress, sizeof(IPAddress), true);
-	GetClientAuthId(TargetClient, AuthId_Engine, AuthId, sizeof(AuthId));
-	GetClientAuthId(client, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+	GetClientAuthId(TargetClient, AuthId_Steam2, AuthId, sizeof(AuthId));
+	GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 	
 	if(Duration == 0)
 		ShowActivity2(client, "[SM] ", "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
@@ -1228,8 +1221,8 @@ public Action Command_BanIP(int client, int args)
 	
 	char AuthId[35], AdminAuthId[35], IPAddress[32];
 	GetClientIP(TargetClient, IPAddress, sizeof(IPAddress), true);
-	GetClientAuthId(TargetClient, AuthId_Engine, AuthId, sizeof(AuthId));
-	GetClientAuthId(client, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+	GetClientAuthId(TargetClient, AuthId_Steam2, AuthId, sizeof(AuthId));
+	GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 	
 	if(Duration == 0)
 		ShowActivity2(client, "[SM] ", "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
@@ -1311,8 +1304,8 @@ public Action Command_FullBan(int client, int args)
 		
 	char AuthId[35], AdminAuthId[35], IPAddress[32];
 	GetClientIP(TargetClient, IPAddress, sizeof(IPAddress), true);
-	GetClientAuthId(TargetClient, AuthId_Engine, AuthId, sizeof(AuthId));
-	GetClientAuthId(client, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+	GetClientAuthId(TargetClient, AuthId_Steam2, AuthId, sizeof(AuthId));
+	GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 
 	
 	return Plugin_Handled;
@@ -1365,7 +1358,7 @@ public Action Command_AddBan(int client, int args)
 		AdminAuthId = "CONSOLE";
 		
 	else
-		GetClientAuthId(client, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+		GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 
 	if(Duration == 0)
 		ShowActivity2(client, "[SM] ", "added a permanent ban on identity %s. Reason: %s", TargetArg, BanReason);
@@ -1408,7 +1401,7 @@ public Action Command_Unban(int client, int args)
 	else
 	{
 		char AdminAuthId[35];
-		GetClientAuthId(client, AuthId_Engine, AdminAuthId, sizeof(AdminAuthId));
+		GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 		
 		WritePackString(DP, AdminAuthId);
 	}
@@ -2132,10 +2125,10 @@ stock void KickBannedClient(int client, int BanDuration, const char[] AdminName,
 	GetConVarString(hcv_Website, Website, sizeof(Website));
 	
 	if(BanDuration == 0)
-		KickClient(client, "You have been permanently banned from this server by admin\nReason: %s\nAdmin's name: %s\n\nCheck %s for more info", KickReason, AdminName, Website);
+		KickClient(client, "You have been permanently banned from this server by admin\nReason: %s\nAdmin name: %s\n\nCheck %s for more info", KickReason, AdminName, Website);
 		
 	else
-		KickClient(client, "You have been banned from this server for %i minutes.\nReason: %s\nAdmin's name: %s\n\nCheck %s for more info.\nYour ban will expire in %i minutes", BanDuration, BanReason, AdminName, Website, (BanDuration - ((GetTime() - TimestampGiven) / 60)) + 1);
+		KickClient(client, "You have been banned from this server for %i minutes.\nReason: %s\nAdmin name: %s\n\nCheck %s for more info.\nYour ban will expire in %i minutes", BanDuration, BanReason, AdminName, Website, RoundToFloor((float(BanDuration) - (float((GetTime() - TimestampGiven)) / 60.0)) - 0.1) + 1);
 }
 
 stock bool IsClientChatGagged(int client, int &Expire = 0, bool &permanent = false, bool &silenced = false)
