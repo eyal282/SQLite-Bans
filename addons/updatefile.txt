@@ -2,17 +2,18 @@
 {
 	"Version"
 	{
-		"Latest"	"2.8"
+		"Latest"	"2.9"
 	}
 	
-	"Notes"	"Fixed double ban logging bug"
-	"Notes"	"Added logs for comms"
-	"Notes"	"Removed [SQLiteBans.smx] from logging."
+	"Notes"	"Added integration to silence disconnected players via my ban disconnected plugin"
+	"Notes"	"Added integration to enable SQLiteBans_Discord. The installation process is identical to SourceBans++ discord integration ( makes sense as I stole it from them )"
 }
 	
 "Files"
 {
 	"Plugin"	"Path_SM/plugins/SQLiteBans.smx"
+	"Plugin"	"Path_SM/plugins/SQLiteBans_Discord.smx"
 
 	"Source"	"Path_SM/scripting/SQLiteBans.sp"
+	"Source"	"Path_SM/scripting/SQLiteBans_Discord.sp"
 }
