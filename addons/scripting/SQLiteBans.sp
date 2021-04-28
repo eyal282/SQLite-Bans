@@ -21,7 +21,7 @@
 
 #pragma newdecls required
 
-#define PLUGIN_VERSION "2.8"
+#define PLUGIN_VERSION "2.9"
 
 
 public Plugin myinfo = 
