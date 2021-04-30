@@ -2,11 +2,12 @@
 {
 	"Version"
 	{
-		"Latest"	"3.0"
+		"Latest"	"3.1"
 	}
 	
-	"Notes"	"Added integration to silence disconnected players via my ban disconnected plugin"
-	"Notes"	"Added integration to enable SQLiteBans_Discord. The installation process is identical to SourceBans++ discord integration ( makes sense as I stole it from them )"
+	"Notes"	"Discord module now logs communication bans as well as bans."
+	"Notes"	"Discord module now creates a config file: cfg/sourcemod/SQLiteBans_Discord.cfg"
+	"Notes"	"Discord module now allows modifying the bot's name and profile picture."
 }
 	
 "Files"
