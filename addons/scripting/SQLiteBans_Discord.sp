@@ -215,7 +215,9 @@ void SendReport(const char AdminAuthId[35], const char AdminName[64], const char
 		
 		char cType[32];
 		
-		GetCommType(cType, sizeof cType, extra);
+		PenaltyAliasByType(extra, cType, sizeof cType, false);
+		
+		cType[0] = CharToUpper(cType[0]);
 		
 		json_object_set_new(jFieldCommType, "value", json_string(cType));
 		
@@ -285,19 +287,6 @@ int GetEmbedColor(int iType)
 		return EmbedColors[iType];
 	
 	return EmbedColors[Ban];
-}
-
-void GetCommType(char[] sBuffer, int iBufferSize, int iType)
-{
-	switch (iType)
-	{
-		case Penalty_Mute:
-			strcopy(sBuffer, iBufferSize, "Mute");
-		case Penalty_Gag:
-			strcopy(sBuffer, iBufferSize, "Gag");
-		case Penalty_Silence:
-			strcopy(sBuffer, iBufferSize, "Silence");
-	}
 }
 
 stock bool IsValidClient(int iClient, bool bAlive = false)
