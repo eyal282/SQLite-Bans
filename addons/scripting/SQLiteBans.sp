@@ -21,7 +21,7 @@
 
 #pragma newdecls required
 
-#define PLUGIN_VERSION "3.0"
+#define PLUGIN_VERSION "3.1"
 
 
 public Plugin myinfo = 
@@ -47,6 +47,8 @@ Handle hcv_Alltalk = INVALID_HANDLE;
 
 Handle fw_OnBanIdentity = INVALID_HANDLE;
 Handle fw_OnBanIdentity_Post = INVALID_HANDLE;
+Handle fw_OnCommPunishIdentity_Post = INVALID_HANDLE;
+
 
 float ExpireBreach = 0.0;
 
@@ -153,8 +155,8 @@ public any Native_CommPunishClient(Handle plugin, int numParams)
 
 public any Native_CommPunishIdentity(Handle plugin, int numParams)
 {
-	char identity[35];
-	GetNativeString(1, identity, sizeof(identity));
+	char AuthId[35];
+	GetNativeString(1, AuthId, sizeof(AuthId));
 	
 	enPenaltyType PenaltyType = GetNativeCell(2);
 
@@ -200,17 +202,17 @@ public any Native_CommPunishIdentity(Handle plugin, int numParams)
 	
 	if(time == 0)
 	{
-		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "INSERT OR REPLACE INTO SQLiteBans_players (AuthId, PlayerName, AdminAuthID, AdminName, Penalty, PenaltyReason, TimestampGiven, DurationMinutes) VALUES ('%s', '%s', '%s', '%s', %i, '%s', %i, %i)", identity, name, AdminAuthId, AdminName, PenaltyType, reason, UnixTime, time);
+		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "INSERT OR REPLACE INTO SQLiteBans_players (AuthId, PlayerName, AdminAuthID, AdminName, Penalty, PenaltyReason, TimestampGiven, DurationMinutes) VALUES ('%s', '%s', '%s', '%s', %i, '%s', %i, %i)", AuthId, name, AdminAuthId, AdminName, PenaltyType, reason, UnixTime, time);
 		SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 1);
 	}
 	else
 	{
 		if(!dontExtend)
 		{
-			SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "UPDATE OR IGNORE SQLiteBans_players SET DurationMinutes = DurationMinutes + %i WHERE AuthId = '%s' AND Penalty = %i AND DurationMinutes != '0'", time, identity, PenaltyType);
+			SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "UPDATE OR IGNORE SQLiteBans_players SET DurationMinutes = DurationMinutes + %i WHERE AuthId = '%s' AND Penalty = %i AND DurationMinutes != '0'", time, AuthId, PenaltyType);
 			SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 2);
 		}
-		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "INSERT OR IGNORE INTO SQLiteBans_players (AuthId, PlayerName, AdminAuthID, AdminName, Penalty, PenaltyReason, TimestampGiven, DurationMinutes) VALUES ('%s', '%s', '%s', '%s', %i, '%s', %i, %i)", identity, name, AdminAuthId, AdminName, PenaltyType, reason, UnixTime, time);	
+		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "INSERT OR IGNORE INTO SQLiteBans_players (AuthId, PlayerName, AdminAuthID, AdminName, Penalty, PenaltyReason, TimestampGiven, DurationMinutes) VALUES ('%s', '%s', '%s', '%s', %i, '%s', %i, %i)", AuthId, name, AdminAuthId, AdminName, PenaltyType, reason, UnixTime, time);	
 		SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 3);
 	}
 	
@@ -220,10 +222,27 @@ public any Native_CommPunishIdentity(Handle plugin, int numParams)
 	PenaltyAliasByType(PenaltyType, PenaltyAlias, false);
 	
 	if(time == 0)
-		LogSQLiteBans("Admin %N [AuthId: %s] added a permanent %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, PenaltyAlias, name, identity, reason);
+		LogSQLiteBans("Admin %N [AuthId: %s] added a permanent %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, PenaltyAlias, name, AuthId, reason);
 
 	else
-		LogSQLiteBans("Admin %N [AuthId: %s] added a %i minute %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, time, PenaltyAlias, name, identity, reason);
+		LogSQLiteBans("Admin %N [AuthId: %s] added a %i minute %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, time, PenaltyAlias, name, AuthId, reason);
+	
+	
+	Call_StartForward(fw_OnCommPunishIdentity_Post);
+
+	Call_PushCell(PenaltyType);
+	
+	Call_PushString(AuthId);
+	Call_PushString(name);
+	
+	Call_PushString(AdminAuthId);
+	Call_PushString(AdminName);
+
+	Call_PushString(reason);
+	
+	Call_PushCell(time);
+	
+	Call_Finish();
 	
 	return true;
 }
@@ -346,6 +365,7 @@ public int BaseCommNative_IsClientMuted(Handle plugin, int numParams)
 
 public any BaseCommNative_SetClientGag(Handle plugin, int numParams)
 {
+	/*
 	int client = GetNativeCell(1);
 	
 	if(client < 1 || client > MaxClients)
@@ -375,12 +395,13 @@ public any BaseCommNative_SetClientGag(Handle plugin, int numParams)
 	Call_PushCell(shouldGag);
 	
 	Call_Finish();
-	
-	return true;
+	*/
+	return false;
 }
 
 public any BaseCommNative_SetClientMute(Handle plugin, int numParams)
 {
+	/*
 	int client = GetNativeCell(1);
 	if(client < 1 || client > MaxClients)
 		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d", client);
@@ -409,8 +430,8 @@ public any BaseCommNative_SetClientMute(Handle plugin, int numParams)
 	Call_PushCell(shouldMute);
 	
 	Call_Finish();
-	
-	return true;
+	*/
+	return false;
 }
 
 public void OnPluginStart()
@@ -426,6 +447,7 @@ public void OnPluginStart()
 	
 	fw_OnBanIdentity = CreateGlobalForward("SQLiteBans_OnBanIdentity", ET_Ignore, Param_Cell, Param_String, Param_String, Param_String, Param_String);
 	fw_OnBanIdentity_Post = CreateGlobalForward("SQLiteBans_OnBanIdentity_Post", ET_Ignore, Param_String, Param_String, Param_String, Param_String, Param_String, Param_Cell);
+	fw_OnCommPunishIdentity_Post = CreateGlobalForward("SQLiteBans_OnCommPunishIdentity_Post", ET_Ignore, Param_Cell, Param_String, Param_String, Param_String, Param_String, Param_String, Param_Cell);
 
 	
 	if(!CommandExists("sm_gag"))
@@ -1532,6 +1554,7 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 		ReplyToCommand(client, "[SM] Error: Could not authenticate %N.", TargetClient);
 		return Plugin_Stop;
 	}
+	
 	if(!SQLiteBans_CommPunishClient(TargetClient, PenaltyType, Duration, PenaltyReason, client, false))
 		return Plugin_Stop;
 

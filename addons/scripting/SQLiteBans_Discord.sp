@@ -2,12 +2,16 @@
 #pragma semicolon 1
 
 #define PLUGIN_AUTHOR "RumbleFrog, SourceBans++ Dev Team, edit by Eyal282"
-#define PLUGIN_VERSION "1.1.0"
+#define PLUGIN_VERSION "1.0"
 
 #include <sourcemod>
 #include <SteamWorks>
 #include <smjansson>
 #include <sqlitebans>
+
+#undef REQUIRE_PLUGIN
+#undef REQUIRE_EXTENSIONS
+#tryinclude <autoexecconfig>
 
 #pragma newdecls required
 
@@ -24,11 +28,11 @@ int EmbedColors[Type_Count] = {
 	0x4362FA, // Comms
 };
 
-ConVar Convars[Type_Count];
+char sHostname[256], sHost[64];
 
-char sEndpoints[Type_Count][256]
-	, sHostname[64]
-	, sHost[64];
+ConVar Convars_WebHook[Type_Count];
+ConVar Convars_BotName[Type_Count];
+ConVar Convars_BotImage[Type_Count];
 
 public Plugin myinfo =
 {
@@ -41,16 +45,35 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	CreateConVar("sbpp_discord_version", PLUGIN_VERSION, "SBPP Discord Version", FCVAR_REPLICATED | FCVAR_SPONLY | FCVAR_DONTRECORD | FCVAR_NOTIFY);
+	CreateConVar("sqlite_bans_discord_version", PLUGIN_VERSION, "SBPP Discord Version", FCVAR_REPLICATED | FCVAR_SPONLY | FCVAR_DONTRECORD | FCVAR_NOTIFY);
 
-	Convars[Ban] = CreateConVar("sbpp_discord_banhook", "https://discord.com/api/webhooks/837021016404262962/IP9ZMDYrCPk7aaoun6MQiPXp9myT7UY3GREK0VEs4Aceuy18iXH9yo6ydN7GqJjC3A96", "Discord web hook endpoint for ban forward", FCVAR_PROTECTED);
-	
-	Convars[Comms] = CreateConVar("sbpp_discord_commshook", "", "Discord web hook endpoint for comms forward. If left empty, the ban endpoint will be used instead", FCVAR_PROTECTED);
-
-	Convars[Ban].AddChangeHook(OnConvarChanged);
-	Convars[Comms].AddChangeHook(OnConvarChanged);
 }
 
+public void OnAllPluginsLoaded()
+{
+	#if defined _autoexecconfig_included
+	
+	AutoExecConfig_SetFile("SQLiteBans_Discord");
+	
+	#endif
+	
+	Convars_WebHook[Ban] = UC_CreateConVar("sqlite_bans_discord_ban_hook", "https://discord.com/api/webhooks/837021016404262962/IP9ZMDYrCPk7aaoun6MQiPXp9myT7UY3GREK0VEs4Aceuy18iXH9yo6ydN7GqJjC3A96", "Discord web hook endpoint for ban forward", FCVAR_PROTECTED);
+	Convars_WebHook[Comms] = UC_CreateConVar("sqlite_bans_discord_comms_hook", "", "Discord web hook endpoint for comms forward. If left empty, the ban endpoint will be used instead", FCVAR_PROTECTED);
+	
+	Convars_BotName[Ban] = UC_CreateConVar("sqlite_bans_discord_ban_name", "SQLite Bans", "Discord bot name", FCVAR_PROTECTED);
+	Convars_BotName[Comms] = UC_CreateConVar("sqlite_bans_discord_comms_name", "", "Discord bot name, if empty, the ban name will be used instead.", FCVAR_PROTECTED);
+
+	Convars_BotImage[Ban] = UC_CreateConVar("sqlite_bans_discord_ban_image", "https://wallpapercave.com/wp/AKsyaeQ.jpg", "Discord bot image URL", FCVAR_PROTECTED);
+	Convars_BotImage[Comms] = UC_CreateConVar("sqlite_bans_discord_comms_image", "", "Discord bot image URL. if left empty, the ban image will be used instead.", FCVAR_PROTECTED);
+	
+	#if defined _autoexecconfig_included
+	
+	AutoExecConfig_ExecuteFile();
+
+	AutoExecConfig_CleanFile();
+	
+	#endif
+}
 public void OnConfigsExecuted()
 {
 	FindConVar("hostname").GetString(sHostname, sizeof sHostname);
@@ -67,26 +90,50 @@ public void OnConfigsExecuted()
 		int iIPB = FindConVar("hostip").IntValue;
 		Format(sHost, sizeof sHost, "%d.%d.%d.%d:%d", iIPB >> 24 & 0x000000FF, iIPB >> 16 & 0x000000FF, iIPB >> 8 & 0x000000FF, iIPB & 0x000000FF, FindConVar("hostport").IntValue);
 	}
-	
-	Convars[Ban].GetString(sEndpoints[Ban], sizeof sEndpoints[]);
-	Convars[Comms].GetString(sEndpoints[Comms], sizeof sEndpoints[]);
 }
 
 public void SQLiteBans_OnBanIdentity_Post(const char AuthId[35], const char Name[64], const char AdminAuthId[35], const char AdminName[64], const char reason[256], int time)
 {
 	SendReport(AdminAuthId, AdminName, AuthId, Name, reason, Ban, time);
 }
-/*
-public void SourceComms_OnBlockAdded(int iAdmin, int iTarget, int iTime, int iCommType, char[] sReason)
+
+public void SQLiteBans_OnCommPunishIdentity_Post(enPenaltyType PenaltyType, const char AuthId[35], const char Name[64], const char AdminAuthId[35], const char AdminName[64], const char reason[256], int time)
 {
-	SendReport(iAdmin, iTarget, sReason, Comms, iTime, iCommType);
+	SendReport(AdminAuthId, AdminName, AuthId, Name, reason, Comms, time, PenaltyType);
 }
-*/
+
 void SendReport(const char AdminAuthId[35], const char AdminName[64], const char AuthId[35], const char Name[64], const char[] sReason, int iType = Ban, int iTime = -1, any extra = 0)
 {
-	if (StrEqual(sEndpoints[Ban], ""))
+	char sBotWebHook[512], sBotName[64], sBotImage[256];
+	
+	Convars_WebHook[iType].GetString(sBotWebHook, sizeof(sBotWebHook));
+	Convars_BotImage[iType].GetString(sBotImage, sizeof(sBotImage));
+	Convars_BotName[iType].GetString(sBotName, sizeof(sBotName));
+	
+	if(sBotWebHook[0] == EOS)
+		Convars_WebHook[Ban].GetString(sBotWebHook, sizeof(sBotWebHook));
+		
+	if(sBotImage[0] == EOS)
+		Convars_BotImage[Ban].GetString(sBotImage, sizeof(sBotImage));
+		
+	if(sBotName[0] == EOS)
+		Convars_BotName[Ban].GetString(sBotName, sizeof(sBotName));
+		
+	if(sBotWebHook[0] == EOS)
 	{
 		LogError("Missing ban hook endpoint");
+		return;
+	}
+	
+	else if(sBotName[0] == EOS)
+	{
+		LogError("Missing ban bot name");
+		return;
+	}
+	
+	else if(sBotImage[0] == EOS)
+	{
+		LogError("Missing ban bot image");
 		return;
 	}
 
@@ -110,14 +157,14 @@ void SendReport(const char AdminAuthId[35], const char AdminName[64], const char
 	
 	Format(sBuffer, sizeof sBuffer, "https://steamcommunity.com/profiles/%s", steam3);
 	json_object_set_new(jContentAuthor, "url", json_string(sBuffer));
-	json_object_set_new(jContentAuthor, "icon_url", json_string("https://sbpp.github.io/img/favicons/android-chrome-512x512.png"));
+	json_object_set_new(jContentAuthor, "icon_url", json_string(sBotImage));
 	json_object_set_new(jContent, "author", jContentAuthor);
 
 	Handle jContentFooter = json_object();
 
 	Format(sBuffer, sizeof sBuffer, "%s (%s)", sHostname, sHost);
 	json_object_set_new(jContentFooter, "text", json_string(sBuffer));
-	json_object_set_new(jContentFooter, "icon_url", json_string("https://sbpp.github.io/img/favicons/android-chrome-512x512.png"));
+	json_object_set_new(jContentFooter, "icon_url", json_string(sBotImage));
 	json_object_set_new(jContent, "footer", jContentFooter);
 
 
@@ -151,8 +198,7 @@ void SendReport(const char AdminAuthId[35], const char AdminName[64], const char
 
 		if (iTime > 0)
 			Format(sBuffer, sizeof sBuffer, "%d Minutes", iTime);
-		else if (iTime < 0)
-			Format(sBuffer, sizeof sBuffer, "Session");
+
 		else
 			Format(sBuffer, sizeof sBuffer, "Permanent");
 
@@ -185,8 +231,8 @@ void SendReport(const char AdminAuthId[35], const char AdminName[64], const char
 
 	json_array_append_new(jEmbeds, jContent);
 
-	json_object_set_new(jRequest, "username", json_string("SQLite Bans"));
-	json_object_set_new(jRequest, "avatar_url", json_string("https://sbpp.github.io/img/favicons/android-chrome-512x512.png"));
+	json_object_set_new(jRequest, "username", json_string(sBotName));
+	json_object_set_new(jRequest, "avatar_url", json_string(sBotImage));
 	json_object_set_new(jRequest, "embeds", jEmbeds);
 
 
@@ -198,12 +244,8 @@ void SendReport(const char AdminAuthId[35], const char AdminName[64], const char
 	#endif
 
 	CloseHandle(jRequest);
-	
-	char sEndpoint[256];
-	
-	GetEndpoint(sEndpoint, sizeof sEndpoint, iType);
 
-	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodPOST, sEndpoint);
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodPOST, sBotWebHook);
 
 	SteamWorks_SetHTTPRequestContextValue(hRequest, 0, 0);
 	SteamWorks_SetHTTPRequestGetOrPostParameter(hRequest, "payload_json", sJson);
@@ -237,31 +279,12 @@ public int OnHTTPRequestComplete(Handle hRequest, bool bFailure, bool bRequestSu
 	CloseHandle(hRequest);
 }
 
-public void OnConvarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
-{
-	if (convar == Convars[Ban])
-		Convars[Ban].GetString(sEndpoints[Ban], sizeof sEndpoints[]);
-	else if (convar == Convars[Comms])
-		Convars[Comms].GetString(sEndpoints[Comms], sizeof sEndpoints[]);
-}
-
 int GetEmbedColor(int iType)
 {
 	if (iType != Type_Unknown)
 		return EmbedColors[iType];
 	
 	return EmbedColors[Ban];
-}
-
-void GetEndpoint(char[] sBuffer, int iBufferSize, int iType)
-{
-	if (!StrEqual(sEndpoints[iType], ""))
-	{
-		strcopy(sBuffer, iBufferSize, sEndpoints[iType]);
-		return;
-	}
-	
-	strcopy(sBuffer, iBufferSize, sEndpoints[Ban]);
 }
 
 void GetCommType(char[] sBuffer, int iBufferSize, int iType)
@@ -301,3 +324,29 @@ void SteamIDToSteamID3(const char[] authid, char[] steamid3, int len) {
     int w = StringToInt(buffer[2]) * 2 + StringToInt(buffer[1]);
     FormatEx(steamid3, len, "[U:1:%i]", w);
 }
+
+#if defined _autoexecconfig_included
+
+stock ConVar UC_CreateConVar(const char[] name, const char[] defaultValue, const char[] description = "", int flags = 0, bool hasMin = false, float min = 0.0, bool hasMax = false, float max = 0.0)
+{
+	ConVar hndl = AutoExecConfig_CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
+	
+	if(flags & FCVAR_PROTECTED)
+		ServerCommand("sm_cvar protect %s", name);
+		
+	return hndl;
+}
+
+#else
+
+stock ConVar UC_CreateConVar(const char[] name, const char[] defaultValue, const char[] description = "", int flags = 0, bool hasMin = false, float min = 0.0, bool hasMax = false, float max = 0.0)
+{
+	ConVar hndl = CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
+	
+	if(flags & FCVAR_PROTECTED)
+		ServerCommand("sm_cvar protect %s", name);
+		
+	return hndl;
+}
+ 
+#endif
