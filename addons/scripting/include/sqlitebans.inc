@@ -90,14 +90,22 @@ native bool SQLiteBans_CommUnpunishIdentity(const char[] AuthId, enPenaltyType P
 // @noreturn
 forward void SQLiteBans_OnBanIdentity(int flags, const char identity[35], char AuthId[35], char IPAddress[32], char Name[64]);
 
-// identity = identity that is getting banned.
-// AuthId = copyback of authid to ban. Only used with flags & BANFLAG_AUTO
-// IPAddress = copyback of IP to ban. Only used with flags & BANFLAG_AUTO
+// AuthId = copyback of authid to ban. Only used with flags & BANFLAG_AUT
 // Name = Player's name to ban
 // @note -			This is only called for identity bans, while OnBanIdentity_Post applies on ALL bans.
 // @note - 			This purposely hides IP Address to prevent issues of IP address leaks.
 // @noreturn
 forward void SQLiteBans_OnBanIdentity_Post(const char AuthId[35], const char Name[64], const char AdminAuthId[35], const char AdminName[64], const char reason[256], int time);
+
+// PenaltyType = Penalty type as found in enum enPenaltyType.
+// AuthId = copyback of authid to ban. Only used with flags & BANFLAG_AUTO
+// Name = Player's name to ban
+// @note -			This is only called for identity bans, while OnBanIdentity_Post applies on ALL bans.
+// @note - 			This purposely hides IP Address to prevent issues of IP address leaks.
+// @noreturn
+forward void SQLiteBans_OnCommPunishIdentity_Post(enPenaltyType PenaltyType, const char AuthId[35], const char Name[64], const char AdminAuthId[35], const char AdminName[64], const char reason[256], int time);
+
+
 
 public SharedPlugin __pl_SQLiteBans = {
 	name = "SQLiteBans", file = "SQLiteBans.smx",
