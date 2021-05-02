@@ -1,0 +1,4 @@
+# All include files but sqlitebans.inc
+
+*.inc
+!sqlitebans.inc
