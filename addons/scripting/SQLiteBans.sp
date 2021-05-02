@@ -22,7 +22,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "3.2"
+#define PLUGIN_VERSION "3.3"
 
 
 public Plugin myinfo = 
@@ -83,6 +83,8 @@ Handle fw_OnBanIdentity = INVALID_HANDLE;
 Handle fw_OnBanIdentity_Post = INVALID_HANDLE;
 Handle fw_OnCommPunishIdentity_Post = INVALID_HANDLE;
 
+Handle fw_OnUnbanIdentity_Post = INVALID_HANDLE;
+Handle fw_OnCommUnpunishIdentity_Post = INVALID_HANDLE;
 
 float ExpireBreach = 0.0;
 
@@ -326,10 +328,10 @@ public any Native_CommUnpunishClient(Handle plugin, int numParams)
 	char PenaltyAlias[32];
 	
 	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias));
-	
-	LogSQLiteBans("Admin %N [AuthId: %s] un%s %N [AuthId: %s].", source, AdminAuthId, PenaltyAlias, client, AuthId);
 		
-	return SQLiteBans_CommUnpunishIdentity(AuthId, PenaltyType, source, name);
+	SQLiteBans_CommUnpunishIdentity(AuthId, PenaltyType, source);
+	
+	return Plugin_Handled;
 }
 
 
@@ -351,11 +353,21 @@ public any Native_CommUnpunishIdentity(Handle plugin, int numParams)
 		return false;
 	}
 	
-	int source = GetNativeCell(3);
-	int UserId = (source == 0 ? 0 : GetClientUserId(source));
+	char AdminAuthId[35], AdminName[64];
 	
-	char name[64];
-	GetNativeString(4, name, sizeof(name));
+	int source = GetNativeCell(3);
+	
+	if(source == 0)
+	{
+		AdminAuthId = "CONSOLE";
+		AdminName = "CONSOLE";
+	}
+	else
+	{
+		GetClientAuthId(source, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
+		GetClientName(source, AdminName, sizeof(AdminName));
+	}
+	int UserId = (source == 0 ? 0 : GetClientUserId(source));
 	
 	Handle DP = CreateDataPack();
 	
@@ -363,9 +375,13 @@ public any Native_CommUnpunishIdentity(Handle plugin, int numParams)
 	WritePackCell(DP, GetCmdReplySource());
 	WritePackString(DP, identity);
 	
+	WritePackCell(DP, PenaltyType);
+	
+	WritePackString(DP, AdminAuthId);
+	
 	char sQuery[1024];
-	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE Penalty = %i AND AuthId = '%s'", PenaltyType, identity);
-	SQL_TQuery(dbLocal, SQLCB_Unpenalty, sQuery, DP);
+	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty = %i AND AuthId = '%s'", PenaltyType, identity);
+	SQL_TQuery(dbLocal, SQLCB_Unpenalty_FindPenalties, sQuery, DP);
 	
 	return true;
 }
@@ -465,6 +481,94 @@ public any BaseCommNative_SetClientMute(Handle plugin, int numParams)
 	return false;
 }
 
+
+public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] sError, Handle DP)
+{
+	if(hndl == null)
+	{
+		CloseHandle(DP);
+		ThrowError(sError);
+    }
+	
+	else if(SQL_GetRowCount(hndl) == 0)
+	{
+		ResetPack(DP);
+
+		int UserId = ReadPackCell(DP);
+	
+		ReplySource CmdReplySource = ReadPackCell(DP);
+		
+		char TargetArg[64];
+		
+		ReadPackString(DP, TargetArg, sizeof(TargetArg));
+		
+		enPenaltyType PenaltyType = ReadPackCell(DP);
+		
+		CloseHandle(DP);
+		
+		char PenaltyAlias[32];
+		PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias), false);
+		
+		int client = GetEntityOfUserId(UserId);
+		
+		ReplyToCommandBySource(client, CmdReplySource, "[SM] Could not find any %s penalties matching %s", PenaltyAlias, TargetArg);
+	}
+	
+	SQL_FetchRow(hndl);
+
+	char AuthId[35], name[64];
+	
+	SQL_FetchString(hndl, 0, AuthId, sizeof(AuthId));
+	SQL_FetchString(hndl, 2, name, sizeof(name));
+	ResetPack(DP);
+	
+	int UserId = ReadPackCell(DP);
+	
+	ReplySource CmdReplySource = ReadPackCell(DP);
+	
+	char TargetArg[64];
+	
+	ReadPackString(DP, TargetArg, sizeof(TargetArg));
+	
+	enPenaltyType PenaltyType = ReadPackCell(DP);
+	
+	char AdminAuthId[35];
+	ReadPackString(DP, AdminAuthId, sizeof(AdminAuthId)); // Even if the player disconnects we must log him.
+	
+	CloseHandle(DP);
+	
+	int client = GetEntityOfUserId(UserId);
+	
+	char PenaltyAlias[32];
+	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias), false);
+	
+	ReplyToCommandBySource(client, CmdReplySource, "[SM] Successfully deleted all %s penalties matching %s", PenaltyAlias, TargetArg);
+	
+	LogSQLiteBans("Admin %N [AuthId: %s] deleted all %s penalties matching \"%s\"", client, AdminAuthId, PenaltyAlias, TargetArg);
+	
+	char AdminName[64];
+	
+	if(client == 0)
+		AdminName = "CONSOLE";
+		
+	else
+		GetClientName(client, AdminName, sizeof(AdminName));
+		
+	char sQuery[1024];
+	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE Penalty = %i AND (AuthId = '%s' OR IPAddress = '%s')", PenaltyType, TargetArg, TargetArg);
+	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 50);
+	
+	Call_StartForward(fw_OnCommUnpunishIdentity_Post);
+	
+	Call_PushCell(PenaltyType);
+	Call_PushString(AuthId);
+	Call_PushString(name);
+	Call_PushString(AdminAuthId);
+	Call_PushString(AdminName);
+	
+	Call_Finish();
+}
+
 public void OnPluginStart()
 {	
 	LoadTranslations("common.phrases");
@@ -479,6 +583,9 @@ public void OnPluginStart()
 	fw_OnBanIdentity = CreateGlobalForward("SQLiteBans_OnBanIdentity", ET_Ignore, Param_Cell, Param_String, Param_String, Param_String, Param_String);
 	fw_OnBanIdentity_Post = CreateGlobalForward("SQLiteBans_OnBanIdentity_Post", ET_Ignore, Param_String, Param_String, Param_String, Param_String, Param_String, Param_Cell);
 	fw_OnCommPunishIdentity_Post = CreateGlobalForward("SQLiteBans_OnCommPunishIdentity_Post", ET_Ignore, Param_Cell, Param_String, Param_String, Param_String, Param_String, Param_String, Param_Cell);
+	
+	fw_OnUnbanIdentity_Post = CreateGlobalForward("SQLiteBans_OnUnbanIdentity_Post", ET_Ignore, Param_String, Param_String, Param_String, Param_String);
+	fw_OnCommUnpunishIdentity_Post = CreateGlobalForward("SQLiteBans_OnCommUnpunishIdentity_Post", ET_Ignore, Param_Cell, Param_String, Param_String, Param_String, Param_String);
 
 	
 	if(!CommandExists("sm_gag"))
@@ -1447,7 +1554,6 @@ public Action Command_Unban(int client, int args)
 	WritePackCell(DP, GetCmdReplySource());
 	
 	WritePackString(DP, TargetArg);
-	
 	if(client == 0)
 		WritePackString(DP, "CONSOLE");
 		
@@ -1460,13 +1566,13 @@ public Action Command_Unban(int client, int args)
 	}
 	
 	char sQuery[1024];
-	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE Penalty = %i AND (AuthId = '%s' OR IPAddress = '%s')", Penalty_Ban, TargetArg, TargetArg);
-	SQL_TQuery(dbLocal, SQLCB_Unban, sQuery, DP);
+	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty = %i AND (AuthId = '%s' OR IPAddress = '%s')", Penalty_Ban, TargetArg, TargetArg);
+	SQL_TQuery(dbLocal, SQLCB_Unban_FindBans, sQuery, DP);
 	
 	return Plugin_Handled;
 }
 
-public void SQLCB_Unban(Handle db, Handle hndl, const char[] sError, Handle DP)
+public void SQLCB_Unban_FindBans(Handle db, Handle hndl, const char[] sError, Handle DP)
 {
 	if(hndl == null)
 	{
@@ -1474,6 +1580,30 @@ public void SQLCB_Unban(Handle db, Handle hndl, const char[] sError, Handle DP)
 		ThrowError(sError);
     }
 	
+	else if(SQL_GetRowCount(hndl) == 0)
+	{
+		ResetPack(DP);
+	
+		int UserId = ReadPackCell(DP);
+	
+		ReplySource CmdReplySource = ReadPackCell(DP);
+		
+		char TargetArg[64];
+		
+		ReadPackString(DP, TargetArg, sizeof(TargetArg));
+		
+		CloseHandle(DP);
+		int client = GetEntityOfUserId(UserId);
+		
+		ReplyToCommandBySource(client, CmdReplySource, "[SM] Could not find any bans matching %s", TargetArg);
+	}
+	
+	SQL_FetchRow(hndl);
+
+	char AuthId[35], name[64];
+	
+	SQL_FetchString(hndl, 0, AuthId, sizeof(AuthId));
+	SQL_FetchString(hndl, 2, name, sizeof(name));
 	ResetPack(DP);
 	
 	int UserId = ReadPackCell(DP);
@@ -1481,19 +1611,39 @@ public void SQLCB_Unban(Handle db, Handle hndl, const char[] sError, Handle DP)
 	ReplySource CmdReplySource = ReadPackCell(DP);
 	
 	char TargetArg[64];
-	ReadPackString(DP, TargetArg, sizeof(TargetArg));
 	
+	ReadPackString(DP, TargetArg, sizeof(TargetArg));
 	char AdminAuthId[35];
 	ReadPackString(DP, AdminAuthId, sizeof(AdminAuthId)); // Even if the player disconnects we must log him.
 	
 	CloseHandle(DP);
+	
 	int client = GetEntityOfUserId(UserId);
 	
-	int AffectedRows = SQL_GetAffectedRows(hndl);
-	ReplyToCommandBySource(client, CmdReplySource, "[SM] Successfully deleted %i bans matching %s", AffectedRows, TargetArg);
+	ReplyToCommandBySource(client, CmdReplySource, "[SM] Successfully deleted all bans matching %s", TargetArg);
 	
-	if(AffectedRows > 0)
-		LogSQLiteBans("Admin %N [AuthId: %s] deleted %i bans matching \"%s\"", client, AdminAuthId, AffectedRows, TargetArg);
+	LogSQLiteBans("Admin %N [AuthId: %s] deleted all bans matching \"%s\"", client, AdminAuthId, TargetArg);
+	
+	char AdminName[64];
+	
+	if(client == 0)
+		AdminName = "CONSOLE";
+		
+	else
+		GetClientName(client, AdminName, sizeof(AdminName));
+		
+	char sQuery[1024];
+	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE Penalty = %i AND (AuthId = '%s' OR IPAddress = '%s')", Penalty_Ban, TargetArg, TargetArg);
+	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 50);
+	
+	Call_StartForward(fw_OnUnbanIdentity_Post);
+	
+	Call_PushString(AuthId);
+	Call_PushString(name);
+	Call_PushString(AdminAuthId);
+	Call_PushString(AdminName);
+	
+	Call_Finish();
 }
 
 public Action Command_Null(int client, int args)
@@ -1765,9 +1915,8 @@ public Action Command_OfflineUnpenalty(int client, int args)
 		ReplyToCommand(client, "[SM] Usage: %s <steamid>", command);
 		return Plugin_Handled;
 	}
-	int UserId = (client == 0 ? 0 : GetClientUserId(client));
 	
-	int PenaltyType = enPenaltyType;
+	enPenaltyType PenaltyType;
 	
 	if(StrEqual(command, "sm_oungag"))
 		PenaltyType = Penalty_Gag;
@@ -1777,16 +1926,8 @@ public Action Command_OfflineUnpenalty(int client, int args)
 		
 	else if(StrEqual(command, "sm_ounsilence"))
 		PenaltyType = Penalty_Silence;
-		
-	Handle DP = CreateDataPack();
 	
-	WritePackCell(DP, UserId);
-	WritePackCell(DP, GetCmdReplySource());
-	WritePackString(DP, TargetArg);
-	
-	char sQuery[1024];
-	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE Penalty = %i AND AuthId = '%s'", PenaltyType, TargetArg);
-	SQL_TQuery(dbLocal, SQLCB_Unpenalty, sQuery, DP);
+	SQLiteBans_CommUnpunishIdentity(TargetArg, PenaltyType, client);
 	
 	return Plugin_Handled;
 }

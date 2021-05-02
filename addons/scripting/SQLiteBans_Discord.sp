@@ -31,8 +31,8 @@ int EmbedColors[Type_Count] = {
 char sHostname[256], sHost[64];
 
 ConVar Convars_WebHook[Type_Count];
-ConVar Convars_BotName[Type_Count];
-ConVar Convars_BotImage[Type_Count];
+ConVar Convars_BotName[Type_Count][2];
+ConVar Convars_BotImage[Type_Count][2];
 
 public Plugin myinfo =
 {
@@ -60,11 +60,17 @@ public void OnAllPluginsLoaded()
 	Convars_WebHook[Ban] = UC_CreateConVar("sqlite_bans_discord_ban_hook", "https://discord.com/api/webhooks/837021016404262962/IP9ZMDYrCPk7aaoun6MQiPXp9myT7UY3GREK0VEs4Aceuy18iXH9yo6ydN7GqJjC3A96", "Discord web hook endpoint for ban forward", FCVAR_PROTECTED);
 	Convars_WebHook[Comms] = UC_CreateConVar("sqlite_bans_discord_comms_hook", "", "Discord web hook endpoint for comms forward. If left empty, the ban endpoint will be used instead", FCVAR_PROTECTED);
 	
-	Convars_BotName[Ban] = UC_CreateConVar("sqlite_bans_discord_ban_name", "SQLite Bans", "Discord bot name", FCVAR_PROTECTED);
-	Convars_BotName[Comms] = UC_CreateConVar("sqlite_bans_discord_comms_name", "", "Discord bot name, if empty, the ban name will be used instead.", FCVAR_PROTECTED);
+	Convars_BotName[Ban][0] = UC_CreateConVar("sqlite_bans_discord_ban_name", "SQLite Bans", "Discord bot name for bans", FCVAR_PROTECTED);
+	Convars_BotName[Comms][0] = UC_CreateConVar("sqlite_bans_discord_comms_name", "", "Discord bot name for comm bans, if empty, the ban name will be used instead.", FCVAR_PROTECTED);
 
-	Convars_BotImage[Ban] = UC_CreateConVar("sqlite_bans_discord_ban_image", "https://wallpapercave.com/wp/AKsyaeQ.jpg", "Discord bot image URL", FCVAR_PROTECTED);
-	Convars_BotImage[Comms] = UC_CreateConVar("sqlite_bans_discord_comms_image", "", "Discord bot image URL. if left empty, the ban image will be used instead.", FCVAR_PROTECTED);
+	Convars_BotImage[Ban][0] = UC_CreateConVar("sqlite_bans_discord_ban_image", "https://wallpapercave.com/wp/AKsyaeQ.jpg", "Discord bot image URL for bans", FCVAR_PROTECTED);
+	Convars_BotImage[Comms][0] = UC_CreateConVar("sqlite_bans_discord_comms_image", "", "Discord bot image URL for comm bans. if left empty, the ban image will be used instead.", FCVAR_PROTECTED);
+	
+	Convars_BotName[Ban][1] = UC_CreateConVar("sqlite_bans_discord_unban_name", "SQLite Bans", "Discord bot name for unbans", FCVAR_PROTECTED);
+	Convars_BotName[Comms][1] = UC_CreateConVar("sqlite_bans_discord_uncomms_name", "", "Discord bot name for comm unbans, if empty, the ban name will be used instead.", FCVAR_PROTECTED);
+
+	Convars_BotImage[Ban][1] = UC_CreateConVar("sqlite_bans_discord_unban_image", "https://wallpapercave.com/wp/AKsyaeQ.jpg", "Discord bot image URL for unbans.", FCVAR_PROTECTED);
+	Convars_BotImage[Comms][1] = UC_CreateConVar("sqlite_bans_discord_uncomms_image", "", "Discord bot image URL for comm unbans. if left empty, the ban image will be used instead.", FCVAR_PROTECTED);
 	
 	#if defined _autoexecconfig_included
 	
@@ -94,30 +100,41 @@ public void OnConfigsExecuted()
 
 public void SQLiteBans_OnBanIdentity_Post(const char AuthId[35], const char Name[64], const char AdminAuthId[35], const char AdminName[64], const char reason[256], int time)
 {
-	SendReport(AdminAuthId, AdminName, AuthId, Name, reason, Ban, time);
+	Punish_SendReport(AdminAuthId, AdminName, AuthId, Name, reason, Ban, time);
 }
 
 public void SQLiteBans_OnCommPunishIdentity_Post(enPenaltyType PenaltyType, const char AuthId[35], const char Name[64], const char AdminAuthId[35], const char AdminName[64], const char reason[256], int time)
 {
-	SendReport(AdminAuthId, AdminName, AuthId, Name, reason, Comms, time, PenaltyType);
+	Punish_SendReport(AdminAuthId, AdminName, AuthId, Name, reason, Comms, time, PenaltyType);
 }
 
-void SendReport(const char AdminAuthId[35], const char AdminName[64], const char AuthId[35], const char Name[64], const char[] sReason, int iType = Ban, int iTime = -1, any extra = 0)
+
+public void SQLiteBans_OnUnbanIdentity_Post(const char AuthId[35], const char Name[64], const char AdminAuthId[35], const char AdminName[64])
+{
+	Unpunish_SendReport(AdminAuthId, AdminName, AuthId, Name, Ban);
+}
+
+public void SQLiteBans_OnCommUnpunishIdentity_Post(enPenaltyType PenaltyType, const char AuthId[35], const char Name[64], const char AdminAuthId[35], const char AdminName[64])
+{
+	Unpunish_SendReport(AdminAuthId, AdminName, AuthId, Name, Comms, PenaltyType);
+}
+
+void Punish_SendReport(const char AdminAuthId[35], const char AdminName[64], const char AuthId[35], const char Name[64], const char[] sReason, int iType = Ban, int iTime = -1, any extra = 0)
 {
 	char sBotWebHook[512], sBotName[64], sBotImage[256];
 	
 	Convars_WebHook[iType].GetString(sBotWebHook, sizeof(sBotWebHook));
-	Convars_BotImage[iType].GetString(sBotImage, sizeof(sBotImage));
-	Convars_BotName[iType].GetString(sBotName, sizeof(sBotName));
+	Convars_BotImage[iType][0].GetString(sBotImage, sizeof(sBotImage));
+	Convars_BotName[iType][0].GetString(sBotName, sizeof(sBotName));
 	
 	if(sBotWebHook[0] == EOS)
 		Convars_WebHook[Ban].GetString(sBotWebHook, sizeof(sBotWebHook));
 		
 	if(sBotImage[0] == EOS)
-		Convars_BotImage[Ban].GetString(sBotImage, sizeof(sBotImage));
+		Convars_BotImage[Ban][0].GetString(sBotImage, sizeof(sBotImage));
 		
 	if(sBotName[0] == EOS)
-		Convars_BotName[Ban].GetString(sBotName, sizeof(sBotName));
+		Convars_BotName[Ban][0].GetString(sBotName, sizeof(sBotName));
 		
 	if(sBotWebHook[0] == EOS)
 	{
@@ -225,6 +242,139 @@ void SendReport(const char AdminAuthId[35], const char AdminName[64], const char
 	}
 
 	json_array_append_new(jFields, jFieldReason);
+
+
+	json_object_set_new(jContent, "fields", jFields);
+
+
+
+	json_array_append_new(jEmbeds, jContent);
+
+	json_object_set_new(jRequest, "username", json_string(sBotName));
+	json_object_set_new(jRequest, "avatar_url", json_string(sBotImage));
+	json_object_set_new(jRequest, "embeds", jEmbeds);
+
+
+
+	json_dump(jRequest, sJson, sizeof sJson, 0, false, false, true);
+
+	#if defined DEBUG
+		PrintToServer(sJson);
+	#endif
+
+	CloseHandle(jRequest);
+
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodPOST, sBotWebHook);
+
+	SteamWorks_SetHTTPRequestContextValue(hRequest, 0, 0);
+	SteamWorks_SetHTTPRequestGetOrPostParameter(hRequest, "payload_json", sJson);
+	SteamWorks_SetHTTPCallbacks(hRequest, OnHTTPRequestComplete);
+
+	if (!SteamWorks_SendHTTPRequest(hRequest))
+		LogError("HTTP request failed for %s against %s", AdminName, Name);
+}
+
+
+void Unpunish_SendReport(const char AdminAuthId[35], const char AdminName[64], const char AuthId[35], const char Name[64], int iType = Ban, any extra = 0)
+{
+	char sBotWebHook[512], sBotName[64], sBotImage[256];
+	
+	Convars_WebHook[iType].GetString(sBotWebHook, sizeof(sBotWebHook));
+	Convars_BotImage[iType][1].GetString(sBotImage, sizeof(sBotImage));
+	Convars_BotName[iType][1].GetString(sBotName, sizeof(sBotName));
+	
+	if(sBotWebHook[0] == EOS)
+		Convars_WebHook[Ban].GetString(sBotWebHook, sizeof(sBotWebHook));
+		
+	if(sBotImage[0] == EOS)
+		Convars_BotImage[Ban][1].GetString(sBotImage, sizeof(sBotImage));
+		
+	if(sBotName[0] == EOS)
+		Convars_BotName[Ban][1].GetString(sBotName, sizeof(sBotName));
+		
+	if(sBotWebHook[0] == EOS)
+	{
+		LogError("Missing ban hook endpoint");
+		return;
+	}
+	
+	else if(sBotName[0] == EOS)
+	{
+		LogError("Missing ban bot name");
+		return;
+	}
+	
+	else if(sBotImage[0] == EOS)
+	{
+		LogError("Missing ban bot image");
+		return;
+	}
+
+	char sJson[2048], sBuffer[256];
+
+	Handle jRequest = json_object();
+
+	Handle jEmbeds = json_array();
+
+
+	Handle jContent = json_object();
+	
+	json_object_set(jContent, "color", json_integer(GetEmbedColor(iType)));
+
+	Handle jContentAuthor = json_object();
+
+	json_object_set_new(jContentAuthor, "name", json_string(Name));
+	
+	char steam3[64];
+	SteamIDToSteamID3(AuthId, steam3, sizeof(steam3));
+	
+	Format(sBuffer, sizeof sBuffer, "https://steamcommunity.com/profiles/%s", steam3);
+	json_object_set_new(jContentAuthor, "url", json_string(sBuffer));
+	json_object_set_new(jContentAuthor, "icon_url", json_string(sBotImage));
+	json_object_set_new(jContent, "author", jContentAuthor);
+
+	Handle jContentFooter = json_object();
+
+	Format(sBuffer, sizeof sBuffer, "%s (%s)", sHostname, sHost);
+	json_object_set_new(jContentFooter, "text", json_string(sBuffer));
+	json_object_set_new(jContentFooter, "icon_url", json_string(sBotImage));
+	json_object_set_new(jContent, "footer", jContentFooter);
+
+
+	Handle jFields = json_array();
+
+
+	Handle jFieldAuthor = json_object();
+	json_object_set_new(jFieldAuthor, "name", json_string("Author"));
+	Format(sBuffer, sizeof sBuffer, "%s (%s)", AdminName, AdminAuthId);
+	json_object_set_new(jFieldAuthor, "value", json_string(sBuffer));
+	json_object_set_new(jFieldAuthor, "inline", json_boolean(true));
+
+	Handle jFieldTarget = json_object();
+	json_object_set_new(jFieldTarget, "name", json_string("Target"));
+	Format(sBuffer, sizeof sBuffer, "%s (%s)", Name, AuthId);
+	json_object_set_new(jFieldTarget, "value", json_string(sBuffer));
+	json_object_set_new(jFieldTarget, "inline", json_boolean(true));
+
+	json_array_append_new(jFields, jFieldAuthor);
+	json_array_append_new(jFields, jFieldTarget);
+	
+	if (iType == Comms)
+	{
+		Handle jFieldCommType = json_object();
+		
+		json_object_set_new(jFieldCommType, "name", json_string("Comm Type"));
+		
+		char cType[32];
+		
+		PenaltyAliasByType(extra, cType, sizeof cType, false);
+		
+		cType[0] = CharToUpper(cType[0]);
+		
+		json_object_set_new(jFieldCommType, "value", json_string(cType));
+		
+		json_array_append_new(jFields, jFieldCommType);
+	}
 
 
 	json_object_set_new(jContent, "fields", jFields);
