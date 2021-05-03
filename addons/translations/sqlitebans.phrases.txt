@@ -1,0 +1,8 @@
+"Phrases"
+{
+	"Command Usage Execute"
+	{
+		"#format" "{1:s}"
+		"en" "Usage: {1} <#userid|name> <command>"
+	}
+}
