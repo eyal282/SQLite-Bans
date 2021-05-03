@@ -10,3 +10,7 @@
 # updatefile.txt
 
 *.txt
+
+# .smx should never pass from here to main.
+
+*.smx
