@@ -34,4 +34,29 @@
 	{
 		"en"	"Note: The ban menu will steamid & IP ban the client."
 	}
+	"Command Usage Ban"
+	{
+		"#format"	"{1:s}"
+		"en"		"Usage: {1} <#userid|name> <minutes|0> [reason]"
+	}
+	"Command Usage Add Ban"
+	{
+		"#format"	"{1:s}"
+		"en"		"Usage: {1} <steamid|ip> <minutes|0> [reason]"	
+	}
+	"Command Usage Unban"
+	{
+		"#format"	"{1:s}"
+		"en"		"Usage: {1} <steamid|ip>"	
+	}
+	"No Bans Found"
+	{
+		"#format"	"{1:s}"
+		"en"		"Could not find any bans matching {1}"
+	}
+	"Ban Deleted"
+	{
+		"#format"	"{1:s}"
+		"en" "Successfully deleted all bans matching {1}"
+	}
 }

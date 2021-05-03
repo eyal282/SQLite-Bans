@@ -1432,7 +1432,11 @@ public Action Command_Ban(int client, int args)
 	}
 	else if(args < 2)
 	{
-		UC_ReplyToCommand(client, "%sUsage: sm_ban <#userid|name> <time> [reason]", PREFIX);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", arg0);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -1490,10 +1494,10 @@ public Action Command_Ban(int client, int args)
 	GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 	
 	if(Duration == 0)
-		ShowActivity2(client, PREFIX, "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
+		UC_ShowActivity2(client, PREFIX, "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
 
 	else
-		ShowActivity2(client, PREFIX, "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
+		UC_ShowActivity2(client, PREFIX, "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
 		
 	return Plugin_Handled;
 }
@@ -1507,7 +1511,7 @@ public Action Command_BanIP(int client, int args)
 	}	
 	else if(args == 0)
 	{
-		UC_ReplyToCommand(client, "%sNote: The ban menu will steamid & IP ban the client.", PREFIX);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Ban Menu - Full Ban Note");
 		
 		DisplayBanTargetMenu(client);
 		
@@ -1515,7 +1519,11 @@ public Action Command_BanIP(int client, int args)
 	}
 	else if(args < 2)
 	{
-		UC_ReplyToCommand(client, "%sUsage: sm_banip <#userid|name> <time> [reason]", PREFIX);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", arg0);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -1572,10 +1580,10 @@ public Action Command_BanIP(int client, int args)
 	GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 	
 	if(Duration == 0)
-		ShowActivity2(client, PREFIX, "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
+		UC_ShowActivity2(client, PREFIX, "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
 
 	else
-		ShowActivity2(client, PREFIX, "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
+		UC_ShowActivity2(client, PREFIX, "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
 
 	
 	return Plugin_Handled;
@@ -1596,7 +1604,11 @@ public Action Command_FullBan(int client, int args)
 	}
 	else if(args < 2)
 	{
-		UC_ReplyToCommand(client, "%sUsage: sm_fban <#userid|name> <time> [reason]", PREFIX);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", arg0);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -1650,10 +1662,10 @@ public Action Command_FullBan(int client, int args)
 	BanClient(TargetClient, Duration, BANFLAG_AUTO|BANFLAG_NOKICK, BanReason, "KICK!!!", ArgStr, client);
 	
 	if(Duration == 0)
-		ShowActivity2(client, PREFIX, "permanently banned %N", TargetClient);
+		UC_ShowActivity2(client, PREFIX, "permanently banned %N", TargetClient);
 		
 	else
-		ShowActivity2(client, PREFIX, "banned %N for %i minutes", TargetClient, Duration);
+		UC_ShowActivity2(client, PREFIX, "banned %N for %i minutes", TargetClient, Duration);
 		
 	char AuthId[35], AdminAuthId[35], IPAddress[32];
 	GetClientIP(TargetClient, IPAddress, sizeof(IPAddress), true);
@@ -1669,12 +1681,16 @@ public Action Command_AddBan(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		UC_ReplyToCommand(client, "%sYou need to disable ban breach by using !kickbreach before banning a client.", PREFIX);
+		UC_ReplyToCommand(client, "%s%t", "Cannot Ban - Ban Breach", PREFIX);
 		return Plugin_Handled;
 	}	
 	if(args < 2)
 	{
-		UC_ReplyToCommand(client, "%sUsage: sm_addban <steamid|ip> <minutes|0> [reason]", PREFIX);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Add Ban", arg0);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -1702,8 +1718,6 @@ public Action Command_AddBan(int client, int args)
 	int Duration = StringToInt(BanDuration);
 	// This is the function to ban an identity with source being the banning client or 0 for console. If you want my plugin to use its own kicking mechanism, add BANFLAG_NOKICK and set the kick reason to anything apart from ""
 	BanIdentity(TargetArg, Duration, flags, BanReason, "sm_addban", client); 
-		
-	UC_ReplyToCommand(client, "%sAdded %s to the ban list", PREFIX, TargetArg);
 	
 	char AdminAuthId[35];
 	
@@ -1714,10 +1728,10 @@ public Action Command_AddBan(int client, int args)
 		GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 
 	if(Duration == 0)
-		ShowActivity2(client, PREFIX, "added a permanent ban on identity %s. Reason: %s", TargetArg, BanReason);
+		UC_ShowActivity2(client, PREFIX, "added a permanent ban on identity %s. Reason: %s", TargetArg, BanReason);
 
 	else
-		ShowActivity2(client, PREFIX, "added a %i minute ban on identity: %s", Duration, BanReason);
+		UC_ShowActivity2(client, PREFIX, "added a %i minute ban on identity: %s", Duration, BanReason);
 
 	return Plugin_Handled;
 }
@@ -1726,7 +1740,11 @@ public Action Command_Unban(int client, int args)
 {
 	if(args == 0)
 	{
-		UC_ReplyToCommand(client, "%sUsage: sm_unban <steamid|ip>", PREFIX);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", arg0);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -1737,7 +1755,11 @@ public Action Command_Unban(int client, int args)
 	
 	if(TargetArg[0] == EOS)
 	{
-		UC_ReplyToCommand(client, "%sUsage: sm_unban <steamid|ip>", PREFIX);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", arg0);
+		
 		return Plugin_Handled;
 	}
 	
@@ -1788,7 +1810,7 @@ public void SQLCB_Unban_FindBans(Handle db, Handle hndl, const char[] sError, Ha
 		CloseHandle(DP);
 		int client = GetEntityOfUserId(UserId);
 		
-		ReplyToCommandBySource(client, CmdReplySource, "%sCould not find any bans matching %s", PREFIX, TargetArg);
+		ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "No bans found", TargetArg);
 	}
 	
 	SQL_FetchRow(hndl);
@@ -1813,7 +1835,7 @@ public void SQLCB_Unban_FindBans(Handle db, Handle hndl, const char[] sError, Ha
 	
 	int client = GetEntityOfUserId(UserId);
 	
-	ReplyToCommandBySource(client, CmdReplySource, "%sSuccessfully deleted all bans matching %s", PREFIX, TargetArg);
+	ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "Ban Deleted", TargetArg);
 	
 	LogSQLiteBans("Admin %N [AuthId: %s] deleted all bans matching \"%s\"", client, AdminAuthId, TargetArg);
 	
@@ -1851,7 +1873,8 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 		
 	if(args < 2)
 	{
-		UC_ReplyToCommand(client, "%sUsage: %s <#userid|name> <minutes|0> [reason]", PREFIX, command);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", command);
+		
 		return Plugin_Stop;
 	}	
 	
@@ -1938,18 +1961,18 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 		if(Duration == 0)
 		{
 			UC_PrintToChat(TargetClient, "%sYou have been permanently %s by %N.", PREFIX, PenaltyAlias, client);
-			ShowActivity2(client, PREFIX, "permanently %s %N | Reason: %s", PenaltyAlias, TargetClient, PenaltyReason);
+			UC_ShowActivity2(client, PREFIX, "permanently %s %N | Reason: %s", PenaltyAlias, TargetClient, PenaltyReason);
 		}
 		else
 		{
 			UC_PrintToChat(TargetClient, "%sYou have been %s by %N for %i minutes.", PREFIX, PenaltyAlias, client, Duration);
-			ShowActivity2(client, PREFIX, "%s %N for %i minutes | Reason: %s", PenaltyAlias, TargetClient, Duration, PenaltyReason);
+			UC_ShowActivity2(client, PREFIX, "%s %N for %i minutes | Reason: %s", PenaltyAlias, TargetClient, Duration, PenaltyReason);
 		}
 	}
 	else
 	{
 		UC_PrintToChat(TargetClient, "%sYou have been %s by %N for %i more minutes ( total: %i )", PREFIX, PenaltyAlias, client, Duration, PositiveOrZero(((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60)));
-		ShowActivity2(client, PREFIX, "%s %N for %i more minutes ( total: %i ) | Reason: %s", PenaltyAlias, TargetClient, Duration, PositiveOrZero((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60), PenaltyReason);
+		UC_ShowActivity2(client, PREFIX, "%s %N for %i more minutes ( total: %i ) | Reason: %s", PenaltyAlias, TargetClient, Duration, PositiveOrZero((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60), PenaltyReason);
 	}	
 	
 	UC_PrintToChat(TargetClient, "%sReason: %s", PREFIX, PenaltyReason);
@@ -2019,7 +2042,7 @@ public Action Listener_Unpenalty(int client, const char[] command, int args)
 		SQLiteBans_CommUnpunishClient(TargetClient, PenaltyType, client);
 	}
 
-	ShowActivity2(client, PREFIX, "%s %s", PenaltyAlias, target_name);
+	UC_ShowActivity2(client, PREFIX, "%s %s", PenaltyAlias, target_name);
 		
 	return Plugin_Stop;
 }
@@ -3308,5 +3331,5 @@ stock void UC_ShowActivity2(int client, const char[] Tag, const char[] format, a
 		ReplaceString(TagBuffer, sizeof(TagBuffer), Colors[i], ColorEquivalents[i]);
 	}
 	
-	ShowActivity2(client, TagBuffer, buffer);
+	UC_ShowActivity2(client, TagBuffer, buffer);
 }
