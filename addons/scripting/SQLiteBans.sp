@@ -598,9 +598,11 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 
 public void OnPluginStart()
 {	
+	LoadTranslations("sqlitebans.phrases");
 	LoadTranslations("common.phrases");
 	LoadTranslations("basebans.phrases");
 	LoadTranslations("core.phrases");
+	
 	
 	BuildPath(Path_SM, g_BanReasonsPath, sizeof(g_BanReasonsPath), "configs/banreasons.txt");
 	
@@ -887,13 +889,13 @@ public Action Timer_CheckCommStatus(Handle hTimer)
 			WasMuted = true;
 			
 		if(WasGagged && WasMuted)
-			UC_PrintToChat(i, "%sYour silence penalty has expired.", PREFIX);
+			UC_PrintToChat(i, "%s%t", PREFIX, "Silence Expired");
 			
 		else if(WasGagged)
-			UC_PrintToChat(i, "%sYour gag penalty has expired.", PREFIX);
+			UC_PrintToChat(i, "%s%t", PREFIX, "Gag Expired");
 			
 		else if(WasMuted)
-			UC_PrintToChat(i, "%sYour mute penalty has expired.", PREFIX);
+			UC_PrintToChat(i, "%s%t", PREFIX, "Mute Expired");
 			
 		if(WasMuted)
 		{
@@ -941,10 +943,10 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 	if(IsClientChatGagged(client, Expire, permanent))
 	{
 		if(permanent)
-			UC_PrintToChat(client, "%sYou have been gagged. It will never expire", PREFIX);
+			UC_PrintToChat(client, "%s%t", PREFIX, "Gag Indicator - Permanent");
 		
 		else
-			UC_PrintToChat(client, "%sYou have been gagged. It will expire in %i minutes", PREFIX, RoundToFloor((float((Expire - GetTime())) / 60.0) - 0.1) + 1);
+			UC_PrintToChat(client, "%s%t", PREFIX, "Gag Indicator - Permanent", RoundToFloor((float((Expire - GetTime())) / 60.0) - 0.1) + 1);
 			
 		return Plugin_Stop;
 	}
@@ -1112,7 +1114,7 @@ public void SQLCB_IdentityBanned(Handle db, Handle hndl, const char[] sError, Ha
 	
 	if(SQL_GetAffectedRows(hndl) == 0)
 	{
-		UC_ReplyToCommand(source, "%sTarget %s is already banned!", PREFIX, Name);
+		UC_ReplyToCommand(source, "%s%t", PREFIX, "Target Already Banned", Name);
 		
 		return;
 	}
@@ -1417,12 +1419,12 @@ public Action Command_Ban(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		UC_ReplyToCommand(client, "%sYou need to disable ban breach by using !kickbreach before banning a client.", PREFIX);
+		UC_ReplyToCommand(client, "%s%t", "Cannot Ban - Ban Breach", PREFIX);
 		return Plugin_Handled;
 	}	
 	else if(args == 0)
 	{
-		UC_ReplyToCommand(client, "%sNote: The ban menu will steamid & IP ban the client.", PREFIX);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Ban Menu - Full Ban Note");
 		
 		DisplayBanTargetMenu(client);
 		
@@ -1500,7 +1502,7 @@ public Action Command_BanIP(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		UC_ReplyToCommand(client, "%sYou need to disable ban breach by using !kickbreach before banning a client.", PREFIX);
+		UC_ReplyToCommand(client, "%s%t", "Cannot Ban - Ban Breach", PREFIX);
 		return Plugin_Handled;
 	}	
 	else if(args == 0)
@@ -1583,7 +1585,7 @@ public Action Command_FullBan(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		UC_ReplyToCommand(client, "%sYou need to disable ban breach by using !kickbreach before banning a client.", PREFIX);
+		UC_ReplyToCommand(client, "%s%t", "Cannot Ban - Ban Breach", PREFIX);
 		return Plugin_Handled;
 	}
 	else if(args == 0)

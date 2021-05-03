@@ -1,8 +1,37 @@
 "Phrases"
 {
-	"Command Usage Execute"
+	"Gag Expired"
 	{
-		"#format" "{1:s}"
-		"en" "Usage: {1} <#userid|name> <command>"
+		"en"	"Your gag penalty has expired."
+	}
+	"Mute Expired"
+	{
+		"en"	"Your mute penalty has expired."
+	}
+	"Silence Expired"
+	{
+		"en"	"Your silence penalty has expired."
+	}
+	"Gag Indicator - Permanent"
+	{
+		"en"	"You have been gagged. It will never expire."
+	}
+	"Gag Indicator - Temporary"
+	{
+		"#format"	"{1:i}"
+		"en"	"You have been gagged. It will expire in {1} minutes."
+	}
+	"Target Already Banned"
+	{
+		"#format"	"{1:s}"
+		"en"	"Target {1} is already banned!"
+	}
+	"Cannot Ban - Ban Breach"
+	{
+		"en"	"You need to disable ban breach by using !kickbreach before banning a client."
+	}
+	"Ban Menu - Full Ban Note"
+	{
+		"en"	"Note: The ban menu will steamid & IP ban the client."
 	}
 }
