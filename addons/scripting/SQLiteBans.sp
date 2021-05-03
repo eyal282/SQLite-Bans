@@ -656,9 +656,6 @@ public void OnPluginStart()
 	AddCommandListener(Listener_Unpenalty, "sm_unmute");
 	AddCommandListener(Listener_Unpenalty, "sm_unsilence");
 	
-	
-	AddCommandListener(Listener_Say, "say");
-	AddCommandListener(Listener_Say, "say_team");
 	RegAdminCmd("sm_ogag", Command_OfflinePenalty, ADMFLAG_CHAT, "sm_ogag <steamid> <minutes|0> [reason]");
 	RegAdminCmd("sm_omute", Command_OfflinePenalty, ADMFLAG_CHAT, "sm_omute <steamid> <minutes|0> [reason]");
 	RegAdminCmd("sm_osilence", Command_OfflinePenalty, ADMFLAG_CHAT, "sm_osilence <steamid> <minutes|0> [reason]");
@@ -901,10 +898,23 @@ public Action Timer_CheckCommStatus(Handle hTimer)
 	}
 }
 
-public Action OnClientSayCommand(int client, const char[] command, const char[] Args)
+public void OnClientSayCommand_Post(int client, const char[] command, const char[] sArgs)
+{
+	if(g_ownReasons[client])
+	{
+		g_ownReasons[client] = false;
+		BanClient(g_BanTarget[client], g_BanTime[client], BANFLAG_AUTO|BANFLAG_NOKICK, sArgs, "KICK!!!", "sm_ban", client);
+	}
+}
+public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
 {
 	int Expire;
 	bool permanent;
+	
+	// Do the banning in the post, to allow sm_abortban to have time.
+	if(g_ownReasons[client])
+		return Plugin_Handled;
+	
 	if(IsClientChatGagged(client, Expire, permanent))
 	{
 		if(permanent)
@@ -1366,6 +1376,7 @@ public Action Command_AbortBan(int client, int args)
 		ReplyToCommand(client, "[SM] %t", "No Access");
 		return Plugin_Handled;
 	}
+	
 	if(g_ownReasons[client])
 	{
 		g_ownReasons[client] = false;
@@ -2885,37 +2896,7 @@ stock void DisplayBanTimeMenu(int client)
 	DisplayMenu(TimeMenuHandle, client, MENU_TIME_FOREVER);
 }
 
-// COMMAND CODE //
 
-public Action Listener_Say(int client, const char[] Command, int args)
-{
-	// is this player preparing to ban someone
-	if (g_ownReasons[client])
-	{
-		// get the reason
-		char reason[512];
-		GetCmdArgString(reason, sizeof(reason));
-		StripQuotes(reason);
-
-		g_ownReasons[client] = false;
-
-		if (StrEqual(reason[0], "!noreason"))
-		{
-			PrintToChat(client, "[SM] %t", "Chat Reason Aborted");
-			return Plugin_Handled;
-		}
-
-		// ban him!
-		BanClient(g_BanTarget[client], g_BanTime[client], BANFLAG_AUTO | BANFLAG_NOKICK, reason, "KICK!!!", "sm_ban", client);
-
-		// block the reason to be sent in chat
-		return Plugin_Handled;
-	}
-	return Plugin_Continue;
-}
-
-
-// QUERY CALL BACKS //
 /*
 public Action:Command_Backup(client, args)
 {
