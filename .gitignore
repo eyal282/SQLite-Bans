@@ -2,3 +2,7 @@
 
 *.inc
 !sqlitebans.inc
+
+# Bruh
+
+*.gitignore
