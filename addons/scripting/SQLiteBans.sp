@@ -99,7 +99,6 @@ TopMenu hTopMenu;
 
 bool g_ownReasons[MAXPLAYERS + 1];
 
-Menu HackingMenuHandle;
 Menu ReasonMenuHandle;
 Menu TimeMenuHandle;
 
@@ -108,6 +107,8 @@ int g_BanTarget[MAXPLAYERS+1], g_BanTime[MAXPLAYERS+1];
 DataPack PlayerDataPack[MAXPLAYERS+1];
 
 char g_BanReasonsPath[PLATFORM_MAX_PATH];
+
+KeyValues g_hKvBanReasons;
 
 public APLRes AskPluginLoad2(Handle myself, bool bLate, char[] error, int err_max)
 {
@@ -589,6 +590,28 @@ public void OnPluginStart()
 	
 	BuildPath(Path_SM, g_BanReasonsPath, sizeof(g_BanReasonsPath), "configs/banreasons.txt");
 	
+	if ((TimeMenuHandle = CreateMenu(MenuHandler_BanTimeList, MenuAction_Select|MenuAction_Cancel|MenuAction_DrawItem)) != INVALID_HANDLE)
+	{
+		TimeMenuHandle.Pagination = 8;
+		TimeMenuHandle.ExitBackButton = true;
+		
+		TimeMenuHandle.AddItem("0", "Permanent");
+		TimeMenuHandle.AddItem("10", "10 Minutes");
+		TimeMenuHandle.AddItem("30", "30 Minutes");
+		TimeMenuHandle.AddItem("60", "1 Hour");
+		TimeMenuHandle.AddItem("240", "4 Hours");
+		TimeMenuHandle.AddItem("1440", "1 Day");
+		TimeMenuHandle.AddItem("10080", "1 Week");
+	}
+
+	if ((ReasonMenuHandle = new Menu(ReasonSelected)) != INVALID_HANDLE)
+	{
+		ReasonMenuHandle.Pagination = 8;
+		ReasonMenuHandle.ExitBackButton = true;
+	}
+
+	LoadBanReasons();
+	
 	RegAdminCmd("sm_ban", Command_Ban, ADMFLAG_BAN, "sm_ban <#userid|name> <minutes|0> [reason]");
 	RegAdminCmd("sm_banip", Command_BanIP, ADMFLAG_BAN, "sm_banip <#userid|name> <minutes|0> [reason]");
 	RegAdminCmd("sm_fban", Command_FullBan, ADMFLAG_BAN, "sm_fban <#userid|name> <minutes|0> [reason]");
@@ -734,6 +757,51 @@ public void OnAllPluginsLoaded()
 	if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE))
 	{
 		OnAdminMenuReady(topmenu);
+	}
+}
+
+void LoadBanReasons()
+{
+	delete g_hKvBanReasons;
+
+	g_hKvBanReasons = new KeyValues("banreasons");
+
+	if (g_hKvBanReasons.ImportFromFile(g_BanReasonsPath))
+	{
+		char sectionName[255];
+		if (!g_hKvBanReasons.GetSectionName(sectionName, sizeof(sectionName)))
+		{
+			SetFailState("Error in %s: File corrupt or in the wrong format", g_BanReasonsPath);
+			return;
+		}
+
+		if (strcmp(sectionName, "banreasons") != 0)
+		{
+			SetFailState("Error in %s: Couldn't find 'banreasons'", g_BanReasonsPath);
+			return;
+		}
+		
+		//Reset kvHandle
+		g_hKvBanReasons.Rewind();
+		
+		g_hKvBanReasons.GotoFirstSubKey(false);
+		
+		char reasonName[100];
+		char reasonFull[256];
+		
+		do
+		{
+			g_hKvBanReasons.GetSectionName(reasonName, sizeof(reasonName));
+			g_hKvBanReasons.GetString(NULL_STRING, reasonFull, sizeof(reasonFull));
+			
+			//Add entry
+			ReasonMenuHandle.AddItem(reasonFull, reasonName);
+			
+		} while (g_hKvBanReasons.GotoNextKey(false));
+		
+	} else {
+		SetFailState("Error in %s: File not found, corrupt or in the wrong format", g_BanReasonsPath);
+		return;
 	}
 }
 
@@ -2615,13 +2683,7 @@ public int ReasonSelected(Menu menu, MenuAction action, int param1, int param2)
 
 			menu.GetItem(param2, key, sizeof(key), _, info, sizeof(info));
 
-			if (StrEqual("Hacking", key))
-			{
-				HackingMenuHandle.Display(param1, MENU_TIME_FOREVER);
-				return;
-			}
-
-			else if (StrEqual("Own Reason", key)) // admin wants to use his own reason
+			if (StrEqual("Own Reason", key)) // admin wants to use his own reason
 			{
 				g_ownReasons[param1] = true;
 				PrintToChat(param1, "[SM] %t", "Chat Reason");
@@ -2650,53 +2712,6 @@ public int ReasonSelected(Menu menu, MenuAction action, int param1, int param2)
 	}
 }
 
-public int HackingSelected(Menu menu, MenuAction action, int param1, int param2)
-{
-	switch (action)
-	{
-		case MenuAction_Select:
-		{
-			char info[128], key[128];
-
-			menu.GetItem(param2, key, sizeof(key), _, info, sizeof(info));
-
-			if (g_BanTarget[param1] != -1 && g_BanTime[param1] != -1)
-				BanClient(g_BanTarget[param1], g_BanTime[param1], BANFLAG_AUTO|BANFLAG_NOKICK, info, "KICK!!!", "sm_ban", param1);
-		}
-
-		case MenuAction_Cancel:
-		{
-			if (param2 == MenuCancel_Disconnected)
-			{
-				DataPack Pack = PlayerDataPack[param1];
-
-				if (Pack != null)
-				{
-					Pack.ReadCell(); // admin index
-					Pack.ReadCell(); // target index
-					Pack.ReadCell(); // admin userid
-					Pack.ReadCell(); // target userid
-					Pack.ReadCell(); // time
-
-					DataPack ReasonPack = Pack.ReadCell();
-
-					if (ReasonPack != INVALID_HANDLE)
-					{
-						CloseHandle(ReasonPack);
-					}
-
-					delete Pack;
-					PlayerDataPack[param1] = null;
-				}
-			}
-
-			else
-			{
-				DisplayMenu(ReasonMenuHandle, param1, MENU_TIME_FOREVER);
-			}
-		}
-	}
-}
 
 public int MenuHandler_BanPlayerList(Menu menu, MenuAction action, int param1, int param2)
 {
