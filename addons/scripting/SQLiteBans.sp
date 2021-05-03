@@ -1743,7 +1743,7 @@ public Action Command_Unban(int client, int args)
 		char arg0[65];
 		GetCmdArg(0, arg0, sizeof(arg0));
 		
-		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", arg0);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Unban", arg0);
 		
 		return Plugin_Handled;
 	}	
@@ -1758,7 +1758,7 @@ public Action Command_Unban(int client, int args)
 		char arg0[65];
 		GetCmdArg(0, arg0, sizeof(arg0));
 		
-		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", arg0);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Unban", arg0);
 		
 		return Plugin_Handled;
 	}
@@ -1943,39 +1943,41 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 
 	if(Expire == -1)
 	{
-		UC_ReplyToCommand(client, "%sCannot extend penalty on a permanently %s client.", PREFIX, PenaltyAlias);
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Extend Permanent Penalty", PenaltyAlias);
 		return Plugin_Stop;
 	}
 	
 	if(!IsClientAuthorized(TargetClient))
 	{
-		UC_ReplyToCommand(client, "%sError: Could not authenticate %N.", PREFIX, TargetClient);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Authenticate Error", TargetClient);
 		return Plugin_Stop;
 	}
 	
 	if(!SQLiteBans_CommPunishClient(TargetClient, PenaltyType, Duration, PenaltyReason, client, false))
 		return Plugin_Stop;
 
-	if(!Extended)
+	if(!Extended || Duration == 0)
 	{
 		if(Duration == 0)
 		{
-			UC_PrintToChat(TargetClient, "%sYou have been permanently %s by %N.", PREFIX, PenaltyAlias, client);
+			
+			UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Permanently Penalized", PenaltyAlias, client);
 			UC_ShowActivity2(client, PREFIX, "permanently %s %N | Reason: %s", PenaltyAlias, TargetClient, PenaltyReason);
 		}
 		else
 		{
-			UC_PrintToChat(TargetClient, "%sYou have been %s by %N for %i minutes.", PREFIX, PenaltyAlias, client, Duration);
+			UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Temporarily Penalized", PenaltyAlias, client, Duration);
 			UC_ShowActivity2(client, PREFIX, "%s %N for %i minutes | Reason: %s", PenaltyAlias, TargetClient, Duration, PenaltyReason);
 		}
 	}
 	else
 	{
-		UC_PrintToChat(TargetClient, "%sYou have been %s by %N for %i more minutes ( total: %i )", PREFIX, PenaltyAlias, client, Duration, PositiveOrZero(((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60)));
+		UC_PrintToChat(TargetClient, "%s%t", "You Are Extended Penalized", PREFIX, PenaltyAlias, client, Duration, PositiveOrZero(((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60)));
 		UC_ShowActivity2(client, PREFIX, "%s %N for %i more minutes ( total: %i ) | Reason: %s", PenaltyAlias, TargetClient, Duration, PositiveOrZero((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60), PenaltyReason);
 	}	
 	
-	UC_PrintToChat(TargetClient, "%sReason: %s", PREFIX, PenaltyReason);
+	UC_PrintToChat(TargetClient, "%s%t", PREFIX, "Reason New Line", PenaltyReason);
 	
 	return Plugin_Stop;
 }
@@ -1988,7 +1990,11 @@ public Action Listener_Unpenalty(int client, const char[] command, int args)
 		
 	if(args == 0)
 	{
-		UC_ReplyToCommand(client, "%sUsage: %s <#userid|name>", PREFIX, command);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Unban", arg0);
+
 		return Plugin_Stop;
 	}	
 	
@@ -2037,7 +2043,7 @@ public Action Listener_Unpenalty(int client, const char[] command, int args)
 	{
 		TargetClient = target_list[i];
 		
-		UC_PrintToChat(TargetClient, "%sYou have been %s by %N", PREFIX, PenaltyAlias, client);
+		UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Unpenalized", PenaltyAlias, client);
 		
 		SQLiteBans_CommUnpunishClient(TargetClient, PenaltyType, client);
 	}
@@ -2055,7 +2061,11 @@ public Action Command_OfflinePenalty(int client, int args)
 	
 	if(args < 2)
 	{
-		UC_ReplyToCommand(client, "%sUsage: %s <steamid> <minutes|0> [reason]", PREFIX, command);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Offline Penalty", command);
+		
 		return Plugin_Handled;
 	}	
 
@@ -2118,7 +2128,11 @@ public Action Command_OfflineUnpenalty(int client, int args)
 	GetCmdArg(0, command, sizeof(command));
 	if(args == 0)
 	{
-		UC_ReplyToCommand(client, "%sUsage: %s <steamid>", PREFIX, command);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Offline Unpenalty", command);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -2128,7 +2142,11 @@ public Action Command_OfflineUnpenalty(int client, int args)
 	
 	if(TargetArg[0] == EOS)
 	{
-		UC_ReplyToCommand(client, "%sUsage: %s <steamid>", PREFIX, command);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Offline Unpenalty", command);
+		
 		return Plugin_Handled;
 	}
 	

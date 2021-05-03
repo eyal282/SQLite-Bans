@@ -28,11 +28,11 @@
 	}
 	"Cannot Ban - Ban Breach"
 	{
-		"en"	"You need to disable ban breach by using !kickbreach before banning a client."
+		"en"	"You need to disable ban breach by using !kickbreach before banning a player."
 	}
 	"Ban Menu - Full Ban Note"
 	{
-		"en"	"Note: The ban menu will steamid & IP ban the client."
+		"en"	"Note: The ban menu will steamid & IP ban the player."
 	}
 	"Command Usage Ban"
 	{
@@ -49,6 +49,16 @@
 		"#format"	"{1:s}"
 		"en"		"Usage: {1} <steamid|ip>"	
 	}
+	"Command Usage Offline Penalty"
+	{
+		"#format"	"{1:s}"
+		"en"	"Usage: {1} <steamid> <minutes|0> [reason]"
+	}
+	"Command Usage Offline Unpenalty"
+	{
+		"#format"	"{1:s}"
+		"en"	"Usage: {1} <steamid>"
+	}
 	"No Bans Found"
 	{
 		"#format"	"{1:s}"
@@ -57,6 +67,41 @@
 	"Ban Deleted"
 	{
 		"#format"	"{1:s}"
-		"en" "Successfully deleted all bans matching {1}"
+		"en" 	"Successfully deleted all bans matching {1}"
+	}
+	"Cannot Extend Permanent Penalty"
+	{
+		"#format"	"{1:s}"
+		"en"	"Cannot extend penalty on a permanently {1} player."
+	}
+	"Cannot Authenticate Error"
+	{
+		"#format"	"{1:N}"
+		"en"	"Error: Could not authenticate {1}."
+	}
+	"You Are Permanently Penalized"
+	{
+		"#format"	"{1:s},{2:N}"
+		"en"	"You have been permanently {1} by {2}."
+	}
+	"You Are Temporarily Penalized"
+	{
+		"#format"	"{1:s},{2:N},{3:i}"
+		"en"	"You have been {1} by {2} for {3} minutes."
+	}	
+	"You Are Extended Penalized"
+	{
+		"#format"	"{1:s},{2:N},{3:i},{4:i}"
+		"en"	"You have been {1} by {2} for {3} more minutes (total: {4})"
+	}
+	"Reason New Line"
+	{
+		"#format"	"{1:s}"
+		"en"	"Reason: {1}"
+	}	
+	"You Are Unpenalized"
+	{
+		"#format"	"{1:s},{2:N}"
+		"en"	"You have been {1} by {2}"
 	}
 }
