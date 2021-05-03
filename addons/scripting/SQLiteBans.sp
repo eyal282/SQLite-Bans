@@ -1358,7 +1358,15 @@ public Action Command_Ban(int client, int args)
 		ReplyToCommand(client, "[SM] You need to disable ban breach by using !kickbreach before banning a client.");
 		return Plugin_Handled;
 	}	
-	if(args < 2)
+	else if(args == 0)
+	{
+		ReplyToCommand(client, "[SM] Note: The ban menu will steamid & IP ban the client.");
+		
+		DisplayBanTargetMenu(client);
+		
+		return Plugin_Handled;
+	}
+	else if(args < 2)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_ban <#userid|name> <time> [reason]");
 		return Plugin_Handled;
@@ -1433,7 +1441,15 @@ public Action Command_BanIP(int client, int args)
 		ReplyToCommand(client, "[SM] You need to disable ban breach by using !kickbreach before banning a client.");
 		return Plugin_Handled;
 	}	
-	if(args < 2)
+	else if(args == 0)
+	{
+		ReplyToCommand(client, "[SM] Note: The ban menu will steamid & IP ban the client.");
+		
+		DisplayBanTargetMenu(client);
+		
+		return Plugin_Handled;
+	}
+	else if(args < 2)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_banip <#userid|name> <time> [reason]");
 		return Plugin_Handled;
@@ -1507,8 +1523,14 @@ public Action Command_FullBan(int client, int args)
 	{	
 		ReplyToCommand(client, "[SM] You need to disable ban breach by using !kickbreach before banning a client.");
 		return Plugin_Handled;
-	}	
-	if(args < 2)
+	}
+	else if(args == 0)
+	{	
+		DisplayBanTargetMenu(client);
+		
+		return Plugin_Handled;
+	}
+	else if(args < 2)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_fban <#userid|name> <time> [reason]");
 		return Plugin_Handled;
