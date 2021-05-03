@@ -95,6 +95,20 @@ bool WasMutedLastCheck[MAXPLAYERS+1], WasGaggedLastCheck[MAXPLAYERS+1];
 
 bool IsHooked = false;
 
+TopMenu hTopMenu;
+
+bool g_ownReasons[MAXPLAYERS + 1];
+
+Menu ReasonMenuHandle;
+Menu TimeMenuHandle;
+
+int g_BanTarget[MAXPLAYERS+1], g_BanTime[MAXPLAYERS+1];
+
+DataPack PlayerDataPack[MAXPLAYERS+1];
+
+char g_BanReasonsPath[PLATFORM_MAX_PATH];
+
+KeyValues g_hKvBanReasons;
 
 public APLRes AskPluginLoad2(Handle myself, bool bLate, char[] error, int err_max)
 {
@@ -572,6 +586,34 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 public void OnPluginStart()
 {	
 	LoadTranslations("common.phrases");
+	LoadTranslations("basebans.phrases");
+	LoadTranslations("core.phrases");
+	
+	BuildPath(Path_SM, g_BanReasonsPath, sizeof(g_BanReasonsPath), "configs/banreasons.txt");
+	
+	if ((TimeMenuHandle = CreateMenu(MenuHandler_BanTimeList, MenuAction_Select|MenuAction_Cancel|MenuAction_DrawItem)) != INVALID_HANDLE)
+	{
+		TimeMenuHandle.Pagination = 8;
+		TimeMenuHandle.ExitBackButton = true;
+		
+		TimeMenuHandle.AddItem("0", "Permanent");
+		TimeMenuHandle.AddItem("10", "10 Minutes");
+		TimeMenuHandle.AddItem("30", "30 Minutes");
+		TimeMenuHandle.AddItem("60", "1 Hour");
+		TimeMenuHandle.AddItem("240", "4 Hours");
+		TimeMenuHandle.AddItem("1440", "1 Day");
+		TimeMenuHandle.AddItem("10080", "1 Week");
+	}
+
+	if ((ReasonMenuHandle = new Menu(ReasonSelected)) != INVALID_HANDLE)
+	{
+		ReasonMenuHandle.Pagination = 8;
+		ReasonMenuHandle.ExitBackButton = true;
+		
+		ReasonMenuHandle.AddItem("Own Reason", "Custom Reason");
+	}
+
+	LoadBanReasons();
 	
 	RegAdminCmd("sm_ban", Command_Ban, ADMFLAG_BAN, "sm_ban <#userid|name> <minutes|0> [reason]");
 	RegAdminCmd("sm_banip", Command_BanIP, ADMFLAG_BAN, "sm_banip <#userid|name> <minutes|0> [reason]");
@@ -627,6 +669,7 @@ public void OnPluginStart()
 	RegAdminCmd("sm_breachbans", Command_BreachBans, ADMFLAG_UNBAN, "Allows all banned clients to connect for the next minute");
 	RegAdminCmd("sm_kickbreach", Command_KickBreach, ADMFLAG_UNBAN, "Kicks all ban breaching clients inside the server");
 	
+	RegConsoleCmd("sm_abortban", Command_AbortBan, "sm_abortban");
 	//RegAdminCmd("sm_sqlitebans_backup", Command_Backup, ADMFLAG_ROOT, "Backs up the bans database to an external file");
 	
 	RegConsoleCmd("sm_commstatus", Command_CommStatus, "Gives you information about communication penalties active on you");
@@ -701,6 +744,69 @@ public void OnLibraryAdded(const char[] name)
 		Updater_AddPlugin(UPDATE_URL);
 	}
 	#endif
+}
+
+
+public void OnConfigsExecuted()
+{
+	//(Re-)Load BanReasons
+	LoadBanReasons();
+}
+
+
+public void OnAllPluginsLoaded()
+{
+	TopMenu topmenu;
+
+	if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE))
+	{
+		OnAdminMenuReady(topmenu);
+	}
+}
+
+void LoadBanReasons()
+{
+	delete g_hKvBanReasons;
+
+	g_hKvBanReasons = new KeyValues("banreasons");
+
+	if (g_hKvBanReasons.ImportFromFile(g_BanReasonsPath))
+	{
+		char sectionName[255];
+		if (!g_hKvBanReasons.GetSectionName(sectionName, sizeof(sectionName)))
+		{
+			SetFailState("Error in %s: File corrupt or in the wrong format", g_BanReasonsPath);
+			return;
+		}
+
+		if (strcmp(sectionName, "banreasons") != 0)
+		{
+			SetFailState("Error in %s: Couldn't find 'banreasons'", g_BanReasonsPath);
+			return;
+		}
+		
+		//Reset kvHandle
+		g_hKvBanReasons.Rewind();
+		
+		g_hKvBanReasons.GotoFirstSubKey(false);
+		
+		char reasonName[100];
+		char reasonFull[256];
+		
+		do
+		{
+			g_hKvBanReasons.GetSectionName(reasonName, sizeof(reasonName));
+			g_hKvBanReasons.GetString(NULL_STRING, reasonFull, sizeof(reasonFull));
+			
+			//Add entry
+			ReasonMenuHandle.AddItem(reasonFull, reasonName);
+			
+		} while (g_hKvBanReasons.GotoNextKey(false));
+		
+	} else {
+		SetFailState("Error in %s: File not found, corrupt or in the wrong format", g_BanReasonsPath);
+		return;
+	}
 }
 
 public void ConnectToDatabase()
@@ -792,10 +898,23 @@ public Action Timer_CheckCommStatus(Handle hTimer)
 	}
 }
 
-public Action OnClientSayCommand(int client, const char[] command, const char[] Args)
+public void OnClientSayCommand_Post(int client, const char[] command, const char[] sArgs)
+{
+	if(g_ownReasons[client])
+	{
+		g_ownReasons[client] = false;
+		BanClient(g_BanTarget[client], g_BanTime[client], BANFLAG_AUTO|BANFLAG_NOKICK, sArgs, "KICK!!!", "sm_ban", client);
+	}
+}
+public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
 {
 	int Expire;
 	bool permanent;
+	
+	// Do the banning in the post, to allow sm_abortban to have time.
+	if(g_ownReasons[client])
+		return Plugin_Handled;
+	
 	if(IsClientChatGagged(client, Expire, permanent))
 	{
 		if(permanent)
@@ -1091,14 +1210,19 @@ public void hcvChange_Alltalk(Handle convar, const char[] oldValue, const char[]
 public void OnClientDisconnect(int client)
 {
 	int count = view_as<int>(enPenaltyType_LENGTH);
+	
 	for(int i=0;i < count;i++)
 		ExpirePenalty[client][i] = 0;
+		
+	g_ownReasons[client] = false;
 }
 
 public void OnClientConnected(int client)
 {
 	WasGaggedLastCheck[client] = false;
 	WasMutedLastCheck[client] = false;
+	
+	g_ownReasons[client] = false;
 }
 
 public void OnClientPostAdminCheck(int client)
@@ -1244,6 +1368,28 @@ public void SQLCB_GetClientInfo(Handle db, Handle hndl, const char[] sError, int
 	}
 }
 
+
+public Action Command_AbortBan(int client, int args)
+{
+	if(!CheckCommandAccess(client, "sm_ban", ADMFLAG_BAN))
+	{
+		ReplyToCommand(client, "[SM] %t", "No Access");
+		return Plugin_Handled;
+	}
+	
+	if(g_ownReasons[client])
+	{
+		g_ownReasons[client] = false;
+		ReplyToCommand(client, "[SM] %t", "AbortBan applied successfully");
+	}
+	else
+	{
+		ReplyToCommand(client, "[SM] %t", "AbortBan not waiting for custom reason");
+	}
+	
+	return Plugin_Handled;
+}
+
 public Action Command_Ban(int client, int args)
 {
 	if(ExpireBreach != 0.0)
@@ -1251,7 +1397,15 @@ public Action Command_Ban(int client, int args)
 		ReplyToCommand(client, "[SM] You need to disable ban breach by using !kickbreach before banning a client.");
 		return Plugin_Handled;
 	}	
-	if(args < 2)
+	else if(args == 0)
+	{
+		ReplyToCommand(client, "[SM] Note: The ban menu will steamid & IP ban the client.");
+		
+		DisplayBanTargetMenu(client);
+		
+		return Plugin_Handled;
+	}
+	else if(args < 2)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_ban <#userid|name> <time> [reason]");
 		return Plugin_Handled;
@@ -1326,7 +1480,15 @@ public Action Command_BanIP(int client, int args)
 		ReplyToCommand(client, "[SM] You need to disable ban breach by using !kickbreach before banning a client.");
 		return Plugin_Handled;
 	}	
-	if(args < 2)
+	else if(args == 0)
+	{
+		ReplyToCommand(client, "[SM] Note: The ban menu will steamid & IP ban the client.");
+		
+		DisplayBanTargetMenu(client);
+		
+		return Plugin_Handled;
+	}
+	else if(args < 2)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_banip <#userid|name> <time> [reason]");
 		return Plugin_Handled;
@@ -1400,8 +1562,14 @@ public Action Command_FullBan(int client, int args)
 	{	
 		ReplyToCommand(client, "[SM] You need to disable ban breach by using !kickbreach before banning a client.");
 		return Plugin_Handled;
-	}	
-	if(args < 2)
+	}
+	else if(args == 0)
+	{	
+		DisplayBanTargetMenu(client);
+		
+		return Plugin_Handled;
+	}
+	else if(args < 2)
 	{
 		ReplyToCommand(client, "[SM] Usage: sm_fban <#userid|name> <time> [reason]");
 		return Plugin_Handled;
@@ -2481,6 +2649,254 @@ public Action Command_KickBreach(int client, int args)
 	
 	return Plugin_Handled;
 }
+
+
+// MENU CODE //
+
+public void OnAdminMenuReady(Handle hTemp)
+{
+	TopMenu topmenu = view_as<TopMenu>(hTemp);
+	#if defined DEBUG
+	LogToFile(logFile, "OnAdminMenuReady()");
+	#endif
+
+	/* Block us from being called twice */
+	if (topmenu == hTopMenu)
+	{
+		return;
+	}
+
+	/* Save the Handle */
+	hTopMenu = topmenu;
+
+	/* Find the "Player Commands" category */
+	TopMenuObject player_commands = hTopMenu.FindCategory(ADMINMENU_PLAYERCOMMANDS);
+
+	if (player_commands != INVALID_TOPMENUOBJECT)
+	{
+		// just to avoid "unused variable 'res'" warning
+		#if defined DEBUG
+		TopMenuObject res = hTopMenu.AddItem(
+			"sm_ban",  // Name
+			AdminMenu_Ban,  // Handler function
+			player_commands,  // We are a submenu of Player Commands
+			"sm_ban",  // The command to be finally called (Override checks)
+			ADMFLAG_BAN); // What flag do we need to see the menu option
+		char temp[125];
+		Format(temp, 125, "Result of AddToTopMenu: %d", res);
+		LogToFile(logFile, temp);
+		LogToFile(logFile, "Added Ban option to admin menu");
+		#else
+		hTopMenu.AddItem(
+			"sm_ban",  // Name
+			AdminMenu_Ban,  // Handler function
+			player_commands,  // We are a submenu of Player Commands
+			"sm_ban",  // The command to be finally called (Override checks)
+			ADMFLAG_BAN); // What flag do we need to see the menu option
+		#endif
+	}
+}
+
+public void AdminMenu_Ban(TopMenu topmenu,
+	TopMenuAction action,  // Action being performed
+	TopMenuObject object_id,  // The object ID (if used)
+	int param,  // client idx of admin who chose the option (if used)
+	char[] buffer,  // Output buffer (if used)
+	int maxlength) // Output buffer (if used)
+{
+	/* Clear the Ownreason bool, so he is able to chat again;) */
+	g_ownReasons[param] = false;
+
+	#if defined DEBUG
+	LogToFile(logFile, "AdminMenu_Ban()");
+	#endif
+
+	switch (action)
+	{
+		// We are only being displayed, We only need to show the option name
+		case TopMenuAction_DisplayOption:
+		{
+			FormatEx(buffer, maxlength, "%T", "Ban player", param);
+
+			#if defined DEBUG
+			LogToFile(logFile, "AdminMenu_Ban() -> Formatted the Ban option text");
+			#endif
+		}
+
+		case TopMenuAction_SelectOption:
+		{
+			DisplayBanTargetMenu(param); // Someone chose to ban someone, show the list of users menu
+
+			#if defined DEBUG
+			LogToFile(logFile, "AdminMenu_Ban() -> DisplayBanTargetMenu()");
+			#endif
+		}
+	}
+}
+
+public int ReasonSelected(Menu menu, MenuAction action, int param1, int param2)
+{
+	switch (action)
+	{
+		case MenuAction_Select:
+		{
+			char info[128], key[128];
+
+			menu.GetItem(param2, key, sizeof(key), _, info, sizeof(info));
+
+			if (StrEqual("Own Reason", key)) // admin wants to use his own reason
+			{
+				g_ownReasons[param1] = true;
+				PrintToChat(param1, "[SM] %t", "Custom ban reason explanation", "sm_abortban");
+				return;
+			}
+
+			else if (g_BanTarget[param1] != -1 && g_BanTime[param1] != -1)
+				BanClient(g_BanTarget[param1], g_BanTime[param1], BANFLAG_AUTO|BANFLAG_NOKICK, info, "KICK!!!", "sm_ban", param1);
+		}
+
+		case MenuAction_Cancel:
+		{
+			if (param2 == MenuCancel_Disconnected)
+			{
+				if (PlayerDataPack[param1] != null)
+				{
+					delete PlayerDataPack[param1];
+				}
+			}
+
+			else if(param2 == MenuCancel_ExitBack)
+			{
+				DisplayBanTimeMenu(param1);
+			}
+		}
+	}
+}
+
+
+public int MenuHandler_BanPlayerList(Menu menu, MenuAction action, int param1, int param2)
+{
+	#if defined DEBUG
+	LogToFile(logFile, "MenuHandler_BanPlayerList()");
+	#endif
+
+	switch (action)
+	{
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+
+		case MenuAction_Cancel:
+		{
+			if (param2 == MenuCancel_ExitBack && hTopMenu != INVALID_HANDLE)
+			{
+				hTopMenu.Display(param1, TopMenuPosition_LastCategory);
+			}
+		}
+
+		case MenuAction_Select:
+		{
+			char info[32], name[32];
+			int userid, target;
+
+			menu.GetItem(param2, info, sizeof(info), _, name, sizeof(name));
+			userid = StringToInt(info);
+
+			if ((target = GetClientOfUserId(userid)) == 0)
+			{
+				PrintToChat(param1, "[SM] %t", "Player no longer available");
+			}
+			else if (!CanUserTarget(param1, target))
+			{
+				PrintToChat(param1, "[SM] %t", "Unable to target");
+			}
+			else
+			{
+				g_BanTarget[param1] = target;
+				DisplayBanTimeMenu(param1);
+			}
+		}
+	}
+}
+
+public int MenuHandler_BanTimeList(Menu menu, MenuAction action, int param1, int param2)
+{
+	#if defined DEBUG
+	LogToFile(logFile, "MenuHandler_BanTimeList()");
+	#endif
+
+	switch (action)
+	{
+		case MenuAction_Cancel:
+		{
+			if (param2 == MenuCancel_ExitBack && hTopMenu != INVALID_HANDLE)
+			{
+				hTopMenu.Display(param1, TopMenuPosition_LastCategory);
+			}
+		}
+
+		case MenuAction_Select:
+		{
+			char info[32];
+
+			menu.GetItem(param2, info, sizeof(info));
+			g_BanTime[param1] = StringToInt(info);
+
+			//DisplayBanReasonMenu(param1);
+			ReasonMenuHandle.Display(param1, MENU_TIME_FOREVER);
+		}
+
+		case MenuAction_DrawItem:
+		{
+			char time[16];
+
+			menu.GetItem(param2, time, sizeof(time));
+
+			return (StringToInt(time) > 0 || CheckCommandAccess(param1, "sm_unban", ADMFLAG_UNBAN | ADMFLAG_ROOT)) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED;
+		}
+	}
+
+	return 0;
+}
+
+stock void DisplayBanTargetMenu(int client)
+{
+	#if defined DEBUG
+	LogToFile(logFile, "DisplayBanTargetMenu()");
+	#endif
+
+	Menu menu = new Menu(MenuHandler_BanPlayerList); // Create a new menu, pass it the handler.
+
+	char title[100];
+
+	FormatEx(title, sizeof(title), "%T:", "Ban player", client);
+
+	menu.SetTitle(title); // Set the title
+	menu.ExitBackButton = true; // Yes we want back/exit
+
+	AddTargetsToMenu(menu,  // Add clients to our menu
+		client,  // The client that called the display
+		false,  // We want to see people connecting
+		false); // And dead people
+
+	menu.Display(client, MENU_TIME_FOREVER); // Show the menu to the client FOREVER!
+}
+
+stock void DisplayBanTimeMenu(int client)
+{
+	#if defined DEBUG
+	LogToFile(logFile, "DisplayBanTimeMenu()");
+	#endif
+
+	char title[100];
+	FormatEx(title, sizeof(title), "%T:", "Ban player", client);
+	SetMenuTitle(TimeMenuHandle, title);
+
+	DisplayMenu(TimeMenuHandle, client, MENU_TIME_FOREVER);
+}
+
+
 /*
 public Action:Command_Backup(client, args)
 {
@@ -2707,6 +3123,7 @@ stock void LogSQLiteBans_Comms(const char[] format, any ...)
 	else
 		LogMessage(buffer);
 }
+
 stock int PositiveOrZero(int value)
 {
 	if(value < 0)
