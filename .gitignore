@@ -2,3 +2,15 @@
 
 *.inc
 !sqlitebans.inc
+
+# Bruh
+
+*.gitignore
+
+# updatefile.txt
+
+*.txt
+
+# .smx should never pass from here to main.
+
+*.smx
