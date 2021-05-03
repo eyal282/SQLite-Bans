@@ -587,6 +587,7 @@ public void OnPluginStart()
 {	
 	LoadTranslations("common.phrases");
 	LoadTranslations("basebans.phrases");
+	LoadTranslations("core.phrases");
 	
 	BuildPath(Path_SM, g_BanReasonsPath, sizeof(g_BanReasonsPath), "configs/banreasons.txt");
 	
@@ -608,6 +609,8 @@ public void OnPluginStart()
 	{
 		ReasonMenuHandle.Pagination = 8;
 		ReasonMenuHandle.ExitBackButton = true;
+		
+		ReasonMenuHandle.AddItem("Own Reason", "Custom Reason");
 	}
 
 	LoadBanReasons();
@@ -653,6 +656,9 @@ public void OnPluginStart()
 	AddCommandListener(Listener_Unpenalty, "sm_unmute");
 	AddCommandListener(Listener_Unpenalty, "sm_unsilence");
 	
+	
+	AddCommandListener(Listener_Say, "say");
+	AddCommandListener(Listener_Say, "say_team");
 	RegAdminCmd("sm_ogag", Command_OfflinePenalty, ADMFLAG_CHAT, "sm_ogag <steamid> <minutes|0> [reason]");
 	RegAdminCmd("sm_omute", Command_OfflinePenalty, ADMFLAG_CHAT, "sm_omute <steamid> <minutes|0> [reason]");
 	RegAdminCmd("sm_osilence", Command_OfflinePenalty, ADMFLAG_CHAT, "sm_osilence <steamid> <minutes|0> [reason]");
@@ -666,6 +672,7 @@ public void OnPluginStart()
 	RegAdminCmd("sm_breachbans", Command_BreachBans, ADMFLAG_UNBAN, "Allows all banned clients to connect for the next minute");
 	RegAdminCmd("sm_kickbreach", Command_KickBreach, ADMFLAG_UNBAN, "Kicks all ban breaching clients inside the server");
 	
+	RegConsoleCmd("sm_abortban", Command_AbortBan, "sm_abortban");
 	//RegAdminCmd("sm_sqlitebans_backup", Command_Backup, ADMFLAG_ROOT, "Backs up the bans database to an external file");
 	
 	RegConsoleCmd("sm_commstatus", Command_CommStatus, "Gives you information about communication penalties active on you");
@@ -1349,6 +1356,27 @@ public void SQLCB_GetClientInfo(Handle db, Handle hndl, const char[] sError, int
 		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE DurationMinutes != 0 AND TimestampGiven + (60 * DurationMinutes) < %i", UnixTime);
 		SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 9);
 	}
+}
+
+
+public Action Command_AbortBan(int client, int args)
+{
+	if(!CheckCommandAccess(client, "sm_ban", ADMFLAG_BAN))
+	{
+		ReplyToCommand(client, "[SM] %t", "No Access");
+		return Plugin_Handled;
+	}
+	if(g_ownReasons[client])
+	{
+		g_ownReasons[client] = false;
+		ReplyToCommand(client, "[SM] %t", "AbortBan applied successfully");
+	}
+	else
+	{
+		ReplyToCommand(client, "[SM] %t", "AbortBan not waiting for custom reason");
+	}
+	
+	return Plugin_Handled;
 }
 
 public Action Command_Ban(int client, int args)
@@ -2708,7 +2736,7 @@ public int ReasonSelected(Menu menu, MenuAction action, int param1, int param2)
 			if (StrEqual("Own Reason", key)) // admin wants to use his own reason
 			{
 				g_ownReasons[param1] = true;
-				PrintToChat(param1, "[SM] %t", "Chat Reason");
+				PrintToChat(param1, "[SM] %t", "Custom ban reason explanation", "sm_abortban");
 				return;
 			}
 
@@ -2726,7 +2754,7 @@ public int ReasonSelected(Menu menu, MenuAction action, int param1, int param2)
 				}
 			}
 
-			else
+			else if(param2 == MenuCancel_ExitBack)
 			{
 				DisplayBanTimeMenu(param1);
 			}
@@ -2859,7 +2887,7 @@ stock void DisplayBanTimeMenu(int client)
 
 // COMMAND CODE //
 
-public Action ChatHook(int client, int args)
+public Action Listener_Say(int client, const char[] Command, int args)
 {
 	// is this player preparing to ban someone
 	if (g_ownReasons[client])
