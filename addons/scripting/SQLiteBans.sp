@@ -81,6 +81,7 @@ char ColorEquivalents[][] =
 
 Handle dbLocal = INVALID_HANDLE;
 
+Handle hcv_Tag = INVALID_HANDLE;
 Handle hcv_Website = INVALID_HANDLE;
 Handle hcv_LogMethod = INVALID_HANDLE;
 Handle hcv_LogBannedConnects = INVALID_HANDLE;
@@ -692,15 +693,7 @@ public void OnPluginStart()
 	AutoExecConfig_SetFile("SQLiteBans");
 	
 	#endif
-	
-	hcv_Website = UC_CreateConVar("sqlite_bans_url", "http://yourwebsite.com", "Url to direct banned players to go to if they wish to appeal their ban");
-	hcv_LogMethod = UC_CreateConVar("sqlite_bans_log_method", "1", "0 - Log in the painful to look at \"L20190412.log\" files. 1 - Log in a seperate file, in sourcemod/logs/SQLiteBans.log");
-	hcv_LogBannedConnects = UC_CreateConVar("sqlite_bans_log_banned_connects", "0", "0 - Don't. 1 - Log whenever a banned player attempts to join the server");
-	hcv_DefaultGagTime = UC_CreateConVar("sqlite_bans_default_gag_time", "7", "If a plugin uses a basecomm native to gag a player, this is how long the gag will last");
-	hcv_DefaultMuteTime = UC_CreateConVar("sqlite_bans_default_mute_time", "7", "If a plugin uses a basecomm native to mute a player, this is how long the mute will last");
-	
-	hcv_Deadtalk = UC_CreateConVar("sm_deadtalk", "0", "Controls how dead communicate. 0 - Off. 1 - Dead players ignore teams. 2 - Dead players talk to living teammates.", 0, true, 0.0, true, 2.0);
-	
+
 	#if defined _autoexecconfig_included
 	
 	AutoExecConfig_ExecuteFile();
@@ -768,12 +761,30 @@ public void OnConfigsExecuted()
 
 public void OnAllPluginsLoaded()
 {
+	hcv_Tag = UC_CreateConVar("sqlite_bans_tag", "[{RED}SQLiteBans{NORMAL}] {NORMAL}", _, FCVAR_PROTECTED);
+	hcv_Website = UC_CreateConVar("sqlite_bans_url", "http://yourwebsite.com", "Url to direct banned players to go to if they wish to appeal their ban", FCVAR_PROTECTED);
+	hcv_LogMethod = UC_CreateConVar("sqlite_bans_log_method", "1", "0 - Log in the painful to look at \"L20190412.log\" files. 1 - Log in a seperate file, in sourcemod/logs/SQLiteBans.log", FCVAR_PROTECTED);
+	hcv_LogBannedConnects = UC_CreateConVar("sqlite_bans_log_banned_connects", "0", "0 - Don't. 1 - Log whenever a banned player attempts to join the server", FCVAR_PROTECTED);
+	hcv_DefaultGagTime = UC_CreateConVar("sqlite_bans_default_gag_time", "7", "If a plugin uses a basecomm native to gag a player, this is how long the gag will last", FCVAR_PROTECTED);
+	hcv_DefaultMuteTime = UC_CreateConVar("sqlite_bans_default_mute_time", "7", "If a plugin uses a basecomm native to mute a player, this is how long the mute will last", FCVAR_PROTECTED);
+	
+	hcv_Deadtalk = UC_CreateConVar("sm_deadtalk", "0", "Controls how dead communicate. 0 - Off. 1 - Dead players ignore teams. 2 - Dead players talk to living teammates.", 0, true, 0.0, true, 2.0);
+	
+	GetConVarString(hcv_Tag, PREFIX, sizeof(PREFIX));
+	HookConVarChange(hcv_Tag, hcvChange_Tag);
+	
 	TopMenu topmenu;
 
 	if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE))
 	{
 		OnAdminMenuReady(topmenu);
 	}
+}
+
+
+public void hcvChange_Tag(Handle convar, const char[] oldValue, const char[] newValue)
+{
+	FormatEx(PREFIX, sizeof(PREFIX), newValue);
 }
 
 void LoadBanReasons()
