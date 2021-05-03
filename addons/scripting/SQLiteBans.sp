@@ -107,7 +107,7 @@ int g_BanTarget[MAXPLAYERS+1], g_BanTime[MAXPLAYERS+1];
 
 DataPack PlayerDataPack[MAXPLAYERS+1];
 
-
+char g_BanReasonsPath[PLATFORM_MAX_PATH];
 
 public APLRes AskPluginLoad2(Handle myself, bool bLate, char[] error, int err_max)
 {
@@ -587,6 +587,8 @@ public void OnPluginStart()
 	LoadTranslations("common.phrases");
 	LoadTranslations("basebans.phrases");
 	
+	BuildPath(Path_SM, g_BanReasonsPath, sizeof(g_BanReasonsPath), "configs/banreasons.txt");
+	
 	RegAdminCmd("sm_ban", Command_Ban, ADMFLAG_BAN, "sm_ban <#userid|name> <minutes|0> [reason]");
 	RegAdminCmd("sm_banip", Command_BanIP, ADMFLAG_BAN, "sm_banip <#userid|name> <minutes|0> [reason]");
 	RegAdminCmd("sm_fban", Command_FullBan, ADMFLAG_BAN, "sm_fban <#userid|name> <minutes|0> [reason]");
@@ -715,6 +717,13 @@ public void OnLibraryAdded(const char[] name)
 		Updater_AddPlugin(UPDATE_URL);
 	}
 	#endif
+}
+
+
+public void OnConfigsExecuted()
+{
+	//(Re-)Load BanReasons
+	LoadBanReasons();
 }
 
 
