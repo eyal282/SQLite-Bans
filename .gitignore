@@ -6,3 +6,7 @@
 # Bruh
 
 *.gitignore
+
+# updatefile.txt
+
+*.txt
