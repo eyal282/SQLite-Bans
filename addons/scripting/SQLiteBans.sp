@@ -1116,14 +1116,19 @@ public void hcvChange_Alltalk(Handle convar, const char[] oldValue, const char[]
 public void OnClientDisconnect(int client)
 {
 	int count = view_as<int>(enPenaltyType_LENGTH);
+	
 	for(int i=0;i < count;i++)
 		ExpirePenalty[client][i] = 0;
+		
+	g_ownReasons[client] = false;
 }
 
 public void OnClientConnected(int client)
 {
 	WasGaggedLastCheck[client] = false;
 	WasMutedLastCheck[client] = false;
+	
+	g_ownReasons[client] = false;
 }
 
 public void OnClientPostAdminCheck(int client)
@@ -2806,23 +2811,35 @@ stock void DisplayBanTimeMenu(int client)
 	DisplayMenu(TimeMenuHandle, client, MENU_TIME_FOREVER);
 }
 
-stock void ResetMenu()
+// COMMAND CODE //
+
+public Action ChatHook(int client, int args)
 {
-	if (TimeMenuHandle != INVALID_HANDLE)
+	// is this player preparing to ban someone
+	if (g_ownReasons[client])
 	{
-		RemoveAllMenuItems(TimeMenuHandle);
-	}
+		// get the reason
+		char reason[512];
+		GetCmdArgString(reason, sizeof(reason));
+		StripQuotes(reason);
 
-	if (ReasonMenuHandle != INVALID_HANDLE)
-	{
-		RemoveAllMenuItems(ReasonMenuHandle);
-	}
+		g_ownReasons[client] = false;
 
-	if (HackingMenuHandle != INVALID_HANDLE)
-	{
-		RemoveAllMenuItems(HackingMenuHandle);
+		if (StrEqual(reason[0], "!noreason"))
+		{
+			PrintToChat(client, "[SM] %t", "Chat Reason Aborted");
+			return Plugin_Handled;
+		}
+
+		// ban him!
+		BanClient(g_BanTarget[client], g_BanTime[client], BANFLAG_AUTO | BANFLAG_NOKICK, reason, "KICK!!!", "sm_ban", client);
+
+		// block the reason to be sent in chat
+		return Plugin_Handled;
 	}
+	return Plugin_Continue;
 }
+
 
 // QUERY CALL BACKS //
 /*
