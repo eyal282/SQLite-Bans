@@ -3349,5 +3349,5 @@ stock void UC_ShowActivity2(int client, const char[] Tag, const char[] format, a
 		ReplaceString(TagBuffer, sizeof(TagBuffer), Colors[i], ColorEquivalents[i]);
 	}
 	
-	UC_ShowActivity2(client, TagBuffer, buffer);
+	ShowActivity2(client, TagBuffer, buffer);
 }
