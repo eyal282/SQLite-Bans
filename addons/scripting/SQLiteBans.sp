@@ -2463,8 +2463,8 @@ public void SQLCB_CommList(Handle db, Handle hndl, const char[] sError, Handle D
 	{
 		if(SQL_GetRowCount(hndl) == 0)
 		{
-			UC_PrintToChat(client, "%sThere are no communication punished clients in the server", PREFIX);
-			PrintToConsole(client, "%sThere are no communication punished clients in the server", PREFIX);
+			UC_PrintToChat(client, "%s%t", PREFIX, "No Penalties At All");
+			PrintToConsole(client, "%s%t", PREFIX, "No Penalties At All");
 		}
 		char TempFormat[512], AuthId[35], PlayerName[64], AdminAuthId[35], AdminName[64], PenaltyReason[256], ExpirationDate[64];
 		
@@ -2675,7 +2675,8 @@ public Action Command_KickBreach(int client, int args)
 		FindClientPenalties(i);
 	}
 
-	UC_PrintToChatAll("%sAdmin %N kicked all breaching clients", PREFIX, client);
+	
+	UC_PrintToChatAdmins("%s%t", PREFIX, "Anounce Kick Breach", client);
 	LogSQLiteBans("Admin %N kicked all ban breaching clients", client);
 	
 	return Plugin_Handled;
@@ -3291,6 +3292,26 @@ stock void UC_PrintToChatAll(const char[] format, any ...)
 			continue;
 		
 		SetGlobalTransTarget(i);
+		VFormat(buffer, sizeof(buffer), format, 2);
+		
+		UC_PrintToChat(i, buffer);
+	}
+}
+
+stock void UC_PrintToChatAdmins(const char[] format, any ...)
+{	
+	char buffer[256];
+	
+	for(int i=1;i <= MaxClients;i++)
+	{
+		if(!IsClientInGame(i))
+			continue;
+		
+		else if (!CheckCommandAccess(i, "sm_admin", ADMFLAG_GENERIC))
+			continue;
+			
+		SetGlobalTransTarget(i);
+		
 		VFormat(buffer, sizeof(buffer), format, 2);
 		
 		UC_PrintToChat(i, buffer);

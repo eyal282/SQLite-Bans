@@ -133,6 +133,10 @@
 	{
 		"en"	"There are no banned clients from the server."
 	}
+	"No Penalties At All"
+	{
+		"en"	"There are no communication punished clients in the server."
+	}
 	"Announce Ban Breach"
 	{
 		"#format"	"{1:N}"
@@ -145,5 +149,10 @@
 	"Ban Breach Reminder"
 	{
 		"en"	"Don't forget to !kickbreach to kick all banned players inside the server."
+	}
+	"Announce Kick Breach"
+	{
+		"#format"	"{1:N}"
+		"en"	"Admin {1} kicked all breaching clients"
 	}
 }
