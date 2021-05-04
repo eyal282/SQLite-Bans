@@ -1700,6 +1700,16 @@ public Action Command_AddBan(int client, int args)
 	
 	int len = BreakString(ArgStr, TargetArg, sizeof(TargetArg));
 	
+	if(len == -1)
+	{
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Add Ban", arg0);
+		
+		return Plugin_Handled;
+	}	
+	
 	int len2 = BreakString(ArgStr[len], BanDuration, sizeof(BanDuration));
 	
 	if(len2 != -1)
