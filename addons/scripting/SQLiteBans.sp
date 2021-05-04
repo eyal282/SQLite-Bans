@@ -3330,7 +3330,7 @@ stock void UC_PrintToConsole(int client, const char[] format, any ...)
 		ReplaceString(buffer, sizeof(buffer), Colors[i], "");
 	}
 	
-	PrintToChat(client, buffer);
+	PrintToConsole(client, buffer);
 }
 stock void UC_ShowActivity2(int client, const char[] Tag, const char[] format, any ...)
 {
