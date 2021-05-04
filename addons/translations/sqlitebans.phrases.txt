@@ -119,4 +119,14 @@
 		"#format"	"{1:s},{2:s}"
 		"en"	"Successfully {1} steamid {2} permanently."
 	}
+	"Unpenalty Not Found"
+	{
+		"#format"	"{1:s},{2:s}"
+		"en"	"Could not find any {1} penalties matching {2}"
+	}
+	"Unpenalty Success"
+	{
+		"#format"	"{1:s},{2:s}"
+		"en"	"Successfully deleted all {1} penalties matching {2}"
+	}
 }
