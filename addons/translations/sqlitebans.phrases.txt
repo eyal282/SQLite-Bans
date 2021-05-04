@@ -104,6 +104,11 @@
 		"#format"	"{1:s},{2:N}"
 		"en"	"You have been {1} by {2}"
 	}
+	"Target Not Penalized"
+	{
+		"#format"	"{1:N},{2:s}"
+		"en"	"{1} is not {2}."	
+	}
 	"Temporary Offline Penalty Success"
 	{
 		"#format"	"{1:s},{2:s},{3:i}"

@@ -97,6 +97,7 @@ Handle fw_OnCommPunishIdentity_Post = INVALID_HANDLE;
 Handle fw_OnUnbanIdentity_Post = INVALID_HANDLE;
 Handle fw_OnCommUnpunishIdentity_Post = INVALID_HANDLE;
 
+bool g_bFakeIdentityAction = false;
 float ExpireBreach = 0.0;
 
 // Unix, setting to -1 makes it permanent.
@@ -208,7 +209,8 @@ public any Native_CommPunishClient(Handle plugin, int numParams)
 	
 	else
 		SetClientListeningFlags(client, VOICE_NORMAL);
-		
+	
+	g_bFakeIdentityAction = true;
 	return SQLiteBans_CommPunishIdentity(AuthId, PenaltyType, name, time, reason, source, dontExtend);
 }
 
@@ -281,12 +283,16 @@ public any Native_CommPunishIdentity(Handle plugin, int numParams)
 	
 	PenaltyAliasByType(PenaltyType, PenaltyAlias, false);
 	
-	if(time == 0)
-		LogSQLiteBans("Admin %N [AuthId: %s] added a permanent %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, PenaltyAlias, name, AuthId, reason);
-
-	else
-		LogSQLiteBans("Admin %N [AuthId: %s] added a %i minute %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, time, PenaltyAlias, name, AuthId, reason);
+	if(!g_bFakeIdentityAction)
+	{
+		if(time == 0)
+			LogSQLiteBans("Admin %N [AuthId: %s] added a permanent %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, PenaltyAlias, name, AuthId, reason);
 	
+		else
+			LogSQLiteBans("Admin %N [AuthId: %s] added a %i minute %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, time, PenaltyAlias, name, AuthId, reason);
+	}
+	
+	g_bFakeIdentityAction = false;
 	
 	Call_StartForward(fw_OnCommPunishIdentity_Post);
 
@@ -356,8 +362,12 @@ public any Native_CommUnpunishClient(Handle plugin, int numParams)
 	
 	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias));
 		
+	g_bFakeIdentityAction = true;
+	
 	SQLiteBans_CommUnpunishIdentity(AuthId, PenaltyType, source);
 	
+	WasGaggedLastCheck[client] = false;
+	WasMutedLastCheck[client] = false;
 	return Plugin_Handled;
 }
 
@@ -405,6 +415,10 @@ public any Native_CommUnpunishIdentity(Handle plugin, int numParams)
 	WritePackCell(DP, PenaltyType);
 	
 	WritePackString(DP, AdminAuthId);
+	
+	WritePackCell(DP, g_bFakeIdentityAction);
+	
+	g_bFakeIdentityAction = false;
 	
 	char sQuery[1024];
 	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty = %i AND AuthId = '%s'", PenaltyType, identity);
@@ -561,6 +575,8 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 	
 	char AdminAuthId[35];
 	ReadPackString(DP, AdminAuthId, sizeof(AdminAuthId)); // Even if the player disconnects we must log him.
+		
+	bool NextFake = ReadPackCell(DP);
 	
 	CloseHandle(DP);
 	
@@ -569,9 +585,12 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 	char PenaltyAlias[32];
 	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias), false);
 	
-	ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "Unpenalty Success", PenaltyAlias, TargetArg);
+	if(!NextFake)
+	{
+		ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "Unpenalty Success", PenaltyAlias, TargetArg);
 	
-	LogSQLiteBans("Admin %N [AuthId: %s] deleted all %s penalties matching \"%s\"", client, AdminAuthId, PenaltyAlias, TargetArg);
+		LogSQLiteBans("Admin %N [AuthId: %s] deleted all %s penalties matching \"%s\"", client, AdminAuthId, PenaltyAlias, TargetArg);
+	}
 	
 	char AdminName[64];
 	
@@ -915,9 +934,9 @@ public Action Timer_CheckCommStatus(Handle hTimer)
 				}
 			}
 		}	
+		
 		WasGaggedLastCheck[i] = IsClientChatGagged(i);
 		WasMutedLastCheck[i] = IsClientVoiceMuted(i);
-			
 		
 	}
 }
@@ -1970,20 +1989,19 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 	{
 		if(Duration == 0)
 		{
-			
-			UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Permanently Penalized", PenaltyAlias, client);
 			UC_ShowActivity2(client, PREFIX, "permanently %s %N | Reason: %s", PenaltyAlias, TargetClient, PenaltyReason);
+			UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Permanently Penalized", PenaltyAlias, client);
 		}
 		else
 		{
-			UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Temporarily Penalized", PenaltyAlias, client, Duration);
 			UC_ShowActivity2(client, PREFIX, "%s %N for %i minutes | Reason: %s", PenaltyAlias, TargetClient, Duration, PenaltyReason);
+			UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Temporarily Penalized", PenaltyAlias, client, Duration);
 		}
 	}
 	else
 	{
-		UC_PrintToChat(TargetClient, "%s%t", "You Are Extended Penalized", PREFIX, PenaltyAlias, client, Duration, PositiveOrZero(((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60)));
 		UC_ShowActivity2(client, PREFIX, "%s %N for %i more minutes ( total: %i ) | Reason: %s", PenaltyAlias, TargetClient, Duration, PositiveOrZero((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60), PenaltyReason);
+		UC_PrintToChat(TargetClient, "%s%t", "You Are Extended Penalized", PREFIX, PenaltyAlias, client, Duration, PositiveOrZero(((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60)));
 	}	
 	
 	UC_PrintToChat(TargetClient, "%s%t", PREFIX, "Reason New Line", PenaltyReason);
@@ -2020,7 +2038,7 @@ public Action Listener_Unpenalty(int client, const char[] command, int args)
 		client, 
 		target_list, 
 		sizeof(target_list), 
-		COMMAND_FILTER_CONNECTED|COMMAND_FILTER_NO_BOTS,
+		COMMAND_FILTER_CONNECTED|COMMAND_FILTER_NO_BOTS|COMMAND_FILTER_NO_MULTI,
 		target_name,
 		sizeof(target_name),
 		tn_is_ml)) <= 0)
@@ -2047,17 +2065,23 @@ public Action Listener_Unpenalty(int client, const char[] command, int args)
 		PenaltyType = Penalty_Silence;
 		PenaltyAlias = "unsilenced";
 	}
+
+	TargetClient = target_list[0];
 	
-	for(int i=0;i < target_count;i++)
+	if(!IsClientPenalized(TargetClient, PenaltyType))
 	{
-		TargetClient = target_list[i];
+		PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias));
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Target Not Penalized", TargetClient, PenaltyAlias);
+	}
+		
+	else
+	{
+		UC_ShowActivity2(client, PREFIX, "%s %s", PenaltyAlias, target_name);
 		
 		UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Unpenalized", PenaltyAlias, client);
-		
+	
 		SQLiteBans_CommUnpunishClient(TargetClient, PenaltyType, client);
 	}
-
-	UC_ShowActivity2(client, PREFIX, "%s %s", PenaltyAlias, target_name);
 		
 	return Plugin_Stop;
 }
@@ -3072,6 +3096,17 @@ stock bool IsClientVoiceMuted(int client, int &Expire = 0, bool &permanent = fal
 	
 	return false;
 }
+
+stock bool IsClientPenalized(int client, enPenaltyType PenaltyType)
+{	
+	int UnixTime = GetTime();
+	
+	if(ExpirePenalty[client][PenaltyType] > UnixTime || ExpirePenalty[client][PenaltyType] == -1)
+		return true;
+	
+	return false;
+}
+
 
 stock bool CanClientBanTarget(int client, int target)
 {
