@@ -2675,7 +2675,7 @@ public Action Command_KickBreach(int client, int args)
 	}
 
 	
-	UC_PrintToChatAdmins("%s%t", PREFIX, "Anounce Kick Breach", client);
+	UC_PrintToChatAdmins("%s%t", PREFIX, "Announce Kick Breach", client);
 	LogSQLiteBans("Admin %N kicked all ban breaching clients", client);
 	
 	return Plugin_Handled;
