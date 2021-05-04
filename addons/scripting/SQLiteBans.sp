@@ -2241,7 +2241,7 @@ public void SQLCB_BanList(Handle db, Handle hndl, const char[] sError, Handle DP
 		if(SQL_GetRowCount(hndl) == 0)
 		{
 			UC_PrintToChat(client, "%s%t", PREFIX, "No Bans At All");
-			PrintToConsole(client, "%s%t", PREFIX, "No Bans At All");
+			UC_PrintToConsole(client, "%s%t", PREFIX, "No Bans At All");
 		}
 		
 		char TempFormat[64], AuthId[35], IPAddress[32], PlayerName[64], AdminAuthId[35], AdminName[64], BanReason[256], ExpirationDate[64];
@@ -2463,7 +2463,7 @@ public void SQLCB_CommList(Handle db, Handle hndl, const char[] sError, Handle D
 		if(SQL_GetRowCount(hndl) == 0)
 		{
 			UC_PrintToChat(client, "%s%t", PREFIX, "No Penalties At All");
-			PrintToConsole(client, "%s%t", PREFIX, "No Penalties At All");
+			UC_PrintToConsole(client, "%s%t", PREFIX, "No Penalties At All");
 		}
 		char TempFormat[512], AuthId[35], PlayerName[64], AdminAuthId[35], AdminName[64], PenaltyReason[256], ExpirationDate[64];
 		
@@ -3317,6 +3317,21 @@ stock void UC_PrintToChatAdmins(const char[] format, any ...)
 	}
 }
 
+
+stock void UC_PrintToConsole(int client, const char[] format, any ...)
+{
+	SetGlobalTransTarget(client);
+	
+	char buffer[256];
+	
+	VFormat(buffer, sizeof(buffer), format, 3);
+	for(int i=0;i < sizeof(Colors);i++)
+	{
+		ReplaceString(buffer, sizeof(buffer), Colors[i], "");
+	}
+	
+	PrintToChat(client, buffer);
+}
 stock void UC_ShowActivity2(int client, const char[] Tag, const char[] format, any ...)
 {
 	char buffer[256], TagBuffer[256];
