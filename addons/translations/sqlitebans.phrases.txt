@@ -129,4 +129,21 @@
 		"#format"	"{1:s},{2:s}"
 		"en"	"Successfully deleted all {1} penalties matching {2}"
 	}
+	"No Bans At All"
+	{
+		"en"	"There are no banned clients from the server."
+	}
+	"Announce Ban Breach"
+	{
+		"#format"	"{1:N}"
+		"en"	"Admin {1} started a ban breach for testing purposes"
+	}
+	"Announce Ban Breach Part 2"
+	{
+		"en"	"All banned players can join for the next 60 seconds"
+	}
+	"Ban Breach Reminder"
+	{
+		"en"	"Don't forget to !kickbreach to kick all banned players inside the server."
+	}
 }

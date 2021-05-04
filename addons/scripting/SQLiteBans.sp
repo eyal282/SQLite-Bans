@@ -538,7 +538,7 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 		
 		int client = GetEntityOfUserId(UserId);
 		
-		ReplyToCommandBySource(client, CmdReplySource, "%sCould not find any %s penalties matching %s", PREFIX, PenaltyAlias, TargetArg);
+		ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "Unpenalty Not Found", PenaltyAlias, TargetArg);
 	}
 	
 	SQL_FetchRow(hndl);
@@ -569,7 +569,7 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 	char PenaltyAlias[32];
 	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias), false);
 	
-	ReplyToCommandBySource(client, CmdReplySource, "%sSuccessfully deleted all %s penalties matching %s", PREFIX, PenaltyAlias, TargetArg);
+	ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "Unpenalty Success", PenaltyAlias, TargetArg);
 	
 	LogSQLiteBans("Admin %N [AuthId: %s] deleted all %s penalties matching \"%s\"", client, AdminAuthId, PenaltyAlias, TargetArg);
 	
@@ -687,8 +687,8 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_abortban", Command_AbortBan, "sm_abortban");
 	//RegAdminCmd("sm_sqlitebans_backup", Command_Backup, ADMFLAG_ROOT, "Backs up the bans database to an external file");
 	
-	RegConsoleCmd("sm_commstatus", Command_CommStatus, "Gives you information about communication penalties active on you");
-	RegConsoleCmd("sm_comms", Command_CommStatus, "Gives you information about communication penalties active on you");
+	//RegConsoleCmd("sm_commstatus", Command_CommStatus, "Gives you information about communication penalties active on you");
+	//RegConsoleCmd("sm_comms", Command_CommStatus, "Gives you information about communication penalties active on you");
 	
 	#if defined _autoexecconfig_included
 	
@@ -2115,6 +2115,7 @@ public Action Command_OfflinePenalty(int client, int args)
 			UC_ReplyToCommand(client, "%s%t", PREFIX, "Permanently Offline Penalty Success", PenaltyAlias, TargetArg);
 			
 	}
+	
 	return Plugin_Handled;
 }
 
@@ -2162,40 +2163,7 @@ public Action Command_OfflineUnpenalty(int client, int args)
 	
 	return Plugin_Handled;
 }
-
-
-public void SQLCB_Unpenalty(Handle db, Handle hndl, const char[] sError, Handle DP)
-{
-	if(hndl == null)
-	{
-		CloseHandle(DP);
-		ThrowError(sError);
-    }
-	
-	ResetPack(DP);
-	
-	int UserId = ReadPackCell(DP);
-	
-	ReplySource CmdReplySource = ReadPackCell(DP);
-	
-	char TargetArg[64];
-	ReadPackString(DP, TargetArg, sizeof(TargetArg));
-	
-	CloseHandle(DP);
-	int client = (UserId == 0 ? 0 : GetClientOfUserId(UserId));
-	
-	if(client == 0)
-		CmdReplySource = SM_REPLY_TO_CONSOLE;
-	
-	ReplySource PrevReplySource = GetCmdReplySource();
-	
-	SetCmdReplySource(CmdReplySource);
-	
-	UC_ReplyToCommand(client, "%sSuccessfully deleted %i penalties matching %s", PREFIX, SQL_GetAffectedRows(hndl), TargetArg);
-	
-	SetCmdReplySource(PrevReplySource);
-}
-
+/*
 public Action Command_CommStatus(int client, int args)
 {
 	char ExpirationDate[64];
@@ -2227,7 +2195,7 @@ public Action Command_CommStatus(int client, int args)
 	
 	return Plugin_Handled;
 }
-
+*/
 public Action Command_BanList(int client, int args)
 {
 	if(client == 0)
@@ -2273,8 +2241,8 @@ public void SQLCB_BanList(Handle db, Handle hndl, const char[] sError, Handle DP
 	{
 		if(SQL_GetRowCount(hndl) == 0)
 		{
-			UC_PrintToChat(client, "%sThere are no banned clients from the server", PREFIX);
-			PrintToConsole(client, "%sThere are no banned clients from the server", PREFIX);
+			UC_PrintToChat(client, "%s%t", PREFIX, "No Bans At All");
+			PrintToConsole(client, "%s%t", PREFIX, "No Bans At All");
 		}
 		
 		char TempFormat[64], AuthId[35], IPAddress[32], PlayerName[64], AdminAuthId[35], AdminName[64], BanReason[256], ExpirationDate[64];
@@ -2302,7 +2270,7 @@ public void SQLCB_BanList(Handle db, Handle hndl, const char[] sError, Handle DP
 			if(BanExpiration <= 0)
 			{
 				BanExpiration = 0;
-				FormatEx(ExpirationDate, sizeof(ExpirationDate), "Never");
+				FormatEx(ExpirationDate, sizeof(ExpirationDate), "∞");
 			}
 			
 			target.init(PlayerName, AuthId, IPAddress, AdminName, AdminAuthId, ExpirationDate, BanReason);
@@ -2527,7 +2495,7 @@ public void SQLCB_CommList(Handle db, Handle hndl, const char[] sError, Handle D
 			if(PenaltyExpiration <= 0)
 			{
 				PenaltyExpiration = 0;
-				FormatEx(ExpirationDate, sizeof(ExpirationDate), "Never");
+				FormatEx(ExpirationDate, sizeof(ExpirationDate), "∞");
 			}
 			
 			target.init(PlayerName, AuthId, "", AdminName, AdminAuthId, ExpirationDate, PenaltyReason, Penalty);
@@ -2681,11 +2649,11 @@ public int CommListTargetInfo_MenuHandler(Handle hMenu, MenuAction action, int c
 public Action Command_BreachBans(int client, int args)
 {
 	ExpireBreach = GetGameTime() + 60.0;
+
+	UC_PrintToChatAdmins("%s%t", PREFIX, "Announce Ban Breach", client);
+	UC_PrintToChatAdmins("%s%t", PREFIX, "Announce Ban Breach Part 2");
 	
-	UC_PrintToChatAll("%sAdmin %N started a ban breach for testing purposes", PREFIX, client);
-	UC_PrintToChatAll("%sAll banned players can join for the next 60 seconds", PREFIX);
-	
-	UC_ReplyToCommand(client, "%sDon't forget to !kickbreach to kick all banned players inside the server.", PREFIX);
+	UC_ReplyToCommand(client, "%s%t", PREFIX, "Ban Breach Reminder");
 	
 	LogSQLiteBans("Admin %N started a 60 second ban breach", client);
 	
