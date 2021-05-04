@@ -104,4 +104,19 @@
 		"#format"	"{1:s},{2:N}"
 		"en"	"You have been {1} by {2}"
 	}
+	"Temporary Offline Penalty Success"
+	{
+		"#format"	"{1:s},{2:s},{3:i}"
+		"en"	"Successfully {1} steamid {2} for {3} minutes."
+	}
+	"Temporary Offline Penalty Note"
+	{
+		"#format"	"{1:s}"
+		"en"	"Note: Using this command on an already {1} player will extend the duration"
+	}
+	"Permanently Offline Penalty Success"
+	{
+		"#format"	"{1:s},{2:s}"
+		"en"	"Successfully {1} steamid {2} permanently."
+	}
 }

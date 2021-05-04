@@ -2107,16 +2107,13 @@ public Action Command_OfflinePenalty(int client, int args)
 	{
 		if(Duration != 0)
 		{
-			UC_ReplyToCommand(client, "%successfully %s steamid %s for %i minutes.", PREFIX, PenaltyAlias, TargetArg, Duration);
-			UC_ReplyToCommand(client, "%sNote: Using this command on an already %s player will extend the duration", PREFIX, PenaltyAlias);
+			
+			UC_ReplyToCommand(client, "%s%t", PREFIX, "Temporary Offline Penalty Success", PenaltyAlias, TargetArg, Duration);
+			UC_ReplyToCommand(client, "%s%t", PREFIX, "Temporary Offline Penalty Note", PenaltyAlias);
 		}	
 		else
-			UC_ReplyToCommand(client, "%sSuccessfully %s steamid %s permanently", PREFIX, PenaltyAlias, TargetArg);
+			UC_ReplyToCommand(client, "%s%t", PREFIX, "Permanently Offline Penalty Success", PenaltyAlias, TargetArg);
 			
-	}
-	else
-	{
-		UC_ReplyToCommand(client, "%sCould not %s steamid %s", PREFIX, PenaltyAlias, TargetArg);
 	}
 	return Plugin_Handled;
 }
