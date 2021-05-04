@@ -1418,7 +1418,7 @@ public Action Command_Ban(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		UC_ReplyToCommand(client, "%s%t", "Cannot Ban - Ban Breach", PREFIX);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Ban - Ban Breach");
 		return Plugin_Handled;
 	}	
 	else if(args == 0)
@@ -1505,7 +1505,7 @@ public Action Command_BanIP(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		UC_ReplyToCommand(client, "%s%t", "Cannot Ban - Ban Breach", PREFIX);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Ban - Ban Breach");
 		return Plugin_Handled;
 	}	
 	else if(args == 0)
@@ -1592,7 +1592,7 @@ public Action Command_FullBan(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		UC_ReplyToCommand(client, "%s%t", "Cannot Ban - Ban Breach", PREFIX);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Ban - Ban Breach");
 		return Plugin_Handled;
 	}
 	else if(args == 0)
@@ -1680,7 +1680,7 @@ public Action Command_AddBan(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		UC_ReplyToCommand(client, "%s%t", "Cannot Ban - Ban Breach", PREFIX);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Ban - Ban Breach");
 		return Plugin_Handled;
 	}	
 	if(args < 2)
@@ -2863,7 +2863,7 @@ public int MenuHandler_BanTimeList(Menu menu, MenuAction action, int param1, int
 		{
 			if (param2 == MenuCancel_ExitBack && hTopMenu != INVALID_HANDLE)
 			{
-				hTopMenu.Display(param1, TopMenuPosition_LastCategory);
+				DisplayBanTargetMenu(param1);
 			}
 		}
 
