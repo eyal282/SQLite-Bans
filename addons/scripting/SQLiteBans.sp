@@ -703,20 +703,6 @@ public void OnPluginStart()
 	AutoExecConfig_CleanFile();
 	
 	#endif
-	
-	hcv_Alltalk = FindConVar("sv_alltalk");
-	
-	HookConVarChange(hcv_Deadtalk, hcvChange_Deadtalk);
-	HookConVarChange(hcv_Alltalk, hcvChange_Alltalk);
-	
-	char Value[64];
-	GetConVarString(hcv_Deadtalk, Value, sizeof(Value));
-	
-	hcvChange_Deadtalk(hcv_Deadtalk, Value, Value);
-	
-	GetConVarString(hcv_Alltalk, Value, sizeof(Value));
-	
-	hcvChange_Alltalk(hcv_Alltalk, Value, Value);
 		
 	char LogPath[256];
 	
@@ -771,10 +757,23 @@ public void OnAllPluginsLoaded()
 	hcv_DefaultMuteTime = UC_CreateConVar("sqlite_bans_default_mute_time", "7", "If a plugin uses a basecomm native to mute a player, this is how long the mute will last", FCVAR_PROTECTED);
 	
 	hcv_Deadtalk = UC_CreateConVar("sm_deadtalk", "0", "Controls how dead communicate. 0 - Off. 1 - Dead players ignore teams. 2 - Dead players talk to living teammates.", 0, true, 0.0, true, 2.0);
+
+	hcv_Alltalk = FindConVar("sv_alltalk");
 	
 	GetConVarString(hcv_Tag, PREFIX, sizeof(PREFIX));
 	HookConVarChange(hcv_Tag, hcvChange_Tag);
 	
+	HookConVarChange(hcv_Deadtalk, hcvChange_Deadtalk);
+	HookConVarChange(hcv_Alltalk, hcvChange_Alltalk);
+	
+	char Value[64];
+	GetConVarString(hcv_Deadtalk, Value, sizeof(Value));
+	
+	hcvChange_Deadtalk(hcv_Deadtalk, Value, Value);
+	
+	GetConVarString(hcv_Alltalk, Value, sizeof(Value));
+	
+	hcvChange_Alltalk(hcv_Alltalk, Value, Value);
 	TopMenu topmenu;
 
 	if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE))
