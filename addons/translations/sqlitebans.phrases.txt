@@ -160,4 +160,19 @@
 		"#format"	"{1:N}"
 		"en"	"Admin {1} kicked all breaching clients"
 	}
+	"Activity Permanently Banned"
+	{
+		"#format"	"{1:N},{2:s}"
+		"en"	"permanently banned {1} for the reason: {2}"
+	}
+	"Activity Temporarily Banned"
+	{
+		"#format"	"{1:N},{2:i},{3:s}"
+		"en"	"banned {1} for {2} minutes for the reason: {3}"
+	}
+	"Activity Permanent Identity Ban"
+	{
+		"#format"	"{1:s},{2:s}"
+		"en"	"added a permanent ban on identity %s for the reason: {2}"
+	}
 }

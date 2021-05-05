@@ -1512,10 +1512,10 @@ public Action Command_Ban(int client, int args)
 	GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 	
 	if(Duration == 0)
-		UC_ShowActivity2(client, PREFIX, "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanently Banned", TargetClient, BanReason);
 
 	else
-		UC_ShowActivity2(client, PREFIX, "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Temporarily Banned", TargetClient, Duration, BanReason);
 		
 	return Plugin_Handled;
 }
@@ -1598,10 +1598,10 @@ public Action Command_BanIP(int client, int args)
 	GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 	
 	if(Duration == 0)
-		UC_ShowActivity2(client, PREFIX, "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanently Banned", TargetClient, BanReason);
 
 	else
-		UC_ShowActivity2(client, PREFIX, "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Temporarily Banned", TargetClient, Duration, BanReason);
 
 	
 	return Plugin_Handled;
@@ -1680,10 +1680,10 @@ public Action Command_FullBan(int client, int args)
 	BanClient(TargetClient, Duration, BANFLAG_AUTO|BANFLAG_NOKICK, BanReason, "KICK!!!", ArgStr, client);
 	
 	if(Duration == 0)
-		UC_ShowActivity2(client, PREFIX, "permanently banned %N", TargetClient);
-		
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanently Banned", TargetClient, BanReason);
+
 	else
-		UC_ShowActivity2(client, PREFIX, "banned %N for %i minutes", TargetClient, Duration);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Temporarily Banned", TargetClient, Duration, BanReason);
 		
 	char AuthId[35], AdminAuthId[35], IPAddress[32];
 	GetClientIP(TargetClient, IPAddress, sizeof(IPAddress), true);
