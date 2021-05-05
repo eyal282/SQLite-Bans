@@ -2667,7 +2667,6 @@ public int CommListTargetInfo_MenuHandler(Handle hMenu, MenuAction action, int c
 			}
 		}
 	}
-	
 }
 
 public Action Command_BreachBans(int client, int args)
@@ -2712,9 +2711,6 @@ public Action Command_KickBreach(int client, int args)
 public void OnAdminMenuReady(Handle hTemp)
 {
 	TopMenu topmenu = view_as<TopMenu>(hTemp);
-	#if defined DEBUG
-	LogToFile(logFile, "OnAdminMenuReady()");
-	#endif
 
 	/* Block us from being called twice */
 	if (topmenu == hTopMenu)
@@ -2730,27 +2726,49 @@ public void OnAdminMenuReady(Handle hTemp)
 
 	if (player_commands != INVALID_TOPMENUOBJECT)
 	{
-		// just to avoid "unused variable 'res'" warning
-		#if defined DEBUG
-		TopMenuObject res = hTopMenu.AddItem(
-			"sm_ban",  // Name
-			AdminMenu_Ban,  // Handler function
-			player_commands,  // We are a submenu of Player Commands
-			"sm_ban",  // The command to be finally called (Override checks)
-			ADMFLAG_BAN); // What flag do we need to see the menu option
-		char temp[125];
-		Format(temp, 125, "Result of AddToTopMenu: %d", res);
-		LogToFile(logFile, temp);
-		LogToFile(logFile, "Added Ban option to admin menu");
-		#else
 		hTopMenu.AddItem(
 			"sm_ban",  // Name
 			AdminMenu_Ban,  // Handler function
 			player_commands,  // We are a submenu of Player Commands
 			"sm_ban",  // The command to be finally called (Override checks)
 			ADMFLAG_BAN); // What flag do we need to see the menu option
-		#endif
 	}
+
+	hTopMenu.AddCategory("SQLiteBans - Comm List", AdminMenu_CommList, "sm_unsilence", ADMFLAG_CHAT);
+	
+}
+
+
+// A category of one item.
+public void AdminMenu_CommList(TopMenu topmenu,
+	TopMenuAction action,  // Action being performed
+	TopMenuObject object_id,  // The object ID (if used)
+	int param,  // client idx of admin who chose the option (if used)
+	char[] buffer,  // Output buffer (if used)
+	int maxlength) // Output buffer (if used)
+{
+	/* Clear the Ownreason bool, so he is able to chat again;) */
+	g_ownReasons[param] = false;
+
+	switch (action)
+	{
+		// A category of one item, directly show the comm list!
+		case TopMenuAction_DisplayOption:
+		{
+			FormatEx(buffer, maxlength, "Comm List");
+		}
+	
+		case TopMenuAction_SelectOption:
+		{
+			DisplayOnlineCommListMenu(param); // Someone chose to ban someone, show the list of users menu
+		}
+		
+	}
+}
+
+void DisplayOnlineCommListMenu(int client)
+{
+
 }
 
 public void AdminMenu_Ban(TopMenu topmenu,
@@ -2763,29 +2781,17 @@ public void AdminMenu_Ban(TopMenu topmenu,
 	/* Clear the Ownreason bool, so he is able to chat again;) */
 	g_ownReasons[param] = false;
 
-	#if defined DEBUG
-	LogToFile(logFile, "AdminMenu_Ban()");
-	#endif
-
 	switch (action)
 	{
 		// We are only being displayed, We only need to show the option name
 		case TopMenuAction_DisplayOption:
 		{
 			FormatEx(buffer, maxlength, "%T", "Ban player", param);
-
-			#if defined DEBUG
-			LogToFile(logFile, "AdminMenu_Ban() -> Formatted the Ban option text");
-			#endif
 		}
 
 		case TopMenuAction_SelectOption:
 		{
 			DisplayBanTargetMenu(param); // Someone chose to ban someone, show the list of users menu
-
-			#if defined DEBUG
-			LogToFile(logFile, "AdminMenu_Ban() -> DisplayBanTargetMenu()");
-			#endif
 		}
 	}
 }
@@ -2832,10 +2838,6 @@ public int ReasonSelected(Menu menu, MenuAction action, int param1, int param2)
 
 public int MenuHandler_BanPlayerList(Menu menu, MenuAction action, int param1, int param2)
 {
-	#if defined DEBUG
-	LogToFile(logFile, "MenuHandler_BanPlayerList()");
-	#endif
-
 	switch (action)
 	{
 		case MenuAction_End:
@@ -2878,10 +2880,6 @@ public int MenuHandler_BanPlayerList(Menu menu, MenuAction action, int param1, i
 
 public int MenuHandler_BanTimeList(Menu menu, MenuAction action, int param1, int param2)
 {
-	#if defined DEBUG
-	LogToFile(logFile, "MenuHandler_BanTimeList()");
-	#endif
-
 	switch (action)
 	{
 		case MenuAction_Cancel:
@@ -2918,10 +2916,6 @@ public int MenuHandler_BanTimeList(Menu menu, MenuAction action, int param1, int
 
 stock void DisplayBanTargetMenu(int client)
 {
-	#if defined DEBUG
-	LogToFile(logFile, "DisplayBanTargetMenu()");
-	#endif
-
 	Menu menu = new Menu(MenuHandler_BanPlayerList); // Create a new menu, pass it the handler.
 
 	char title[100];
@@ -2941,10 +2935,6 @@ stock void DisplayBanTargetMenu(int client)
 
 stock void DisplayBanTimeMenu(int client)
 {
-	#if defined DEBUG
-	LogToFile(logFile, "DisplayBanTimeMenu()");
-	#endif
-
 	char title[100];
 	FormatEx(title, sizeof(title), "%T:", "Ban player", client);
 	SetMenuTitle(TimeMenuHandle, title);
