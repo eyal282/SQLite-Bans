@@ -163,16 +163,36 @@
 	"Activity Permanently Banned"
 	{
 		"#format"	"{1:N},{2:s}"
-		"en"	"permanently banned {1} for the reason: {2}"
+		"en"	"permanently banned {1} | Reason: {2}"
 	}
 	"Activity Temporarily Banned"
 	{
 		"#format"	"{1:N},{2:i},{3:s}"
-		"en"	"banned {1} for {2} minutes for the reason: {3}"
+		"en"	"banned {1} for {2} minutes | Reason: {3}"
 	}
 	"Activity Permanent Identity Ban"
 	{
 		"#format"	"{1:s},{2:s}"
-		"en"	"added a permanent ban on identity %s for the reason: {2}"
+		"en"	"added a permanent ban on identity {1} | Reason: {2}"
+	}
+	"Activity Temporary Identity Ban"
+	{
+		"#format"	"{1:i},{2:s},{3:s}"
+		"en"	"added a {1} minute ban on identity {2} | Reason: {3}"
+	}	
+	"Activity Permanently Penalized"
+	{	
+		"#format"	"{1:s},{2:N},{3:s}"
+		"en"	"permanently {1} {2} | Reason: {3}"
+	}
+	"Activity Temporarily Penalized"
+	{
+		"#format"	"{1:s},{2:N},{3:i},{4:s}"
+		"en"	"{1} {2} for {3} minutes | Reason: {4}"
+	}
+	"Activity Extended Temporary Penalty"
+	{
+		"#format"	"{1:s},{2:N},{3:i},{4:i},{5:s}"
+		"en"	"{1} {2} for {3} more minutes ( total: {4} ) | Reason: {5}"
 	}
 }

@@ -1756,10 +1756,10 @@ public Action Command_AddBan(int client, int args)
 		GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 
 	if(Duration == 0)
-		UC_ShowActivity2(client, PREFIX, "added a permanent ban on identity %s. Reason: %s", TargetArg, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanent Identity Ban", TargetArg, BanReason);
 
 	else
-		UC_ShowActivity2(client, PREFIX, "added a %i minute ban on identity: %s", Duration, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanent Identity Ban", Duration, BanReason);
 
 	return Plugin_Handled;
 }
@@ -1940,20 +1940,15 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 	char PenaltyAlias[32];
 	enPenaltyType PenaltyType;
 	if(StrEqual(command, "sm_gag"))
-	{
 		PenaltyType = Penalty_Gag;
-		PenaltyAlias = "gagged";
-	}
+
 	else if(StrEqual(command, "sm_mute"))
-	{
 		PenaltyType = Penalty_Mute;
-		PenaltyAlias = "muted";
-	}
+
 	else if(StrEqual(command, "sm_silence"))
-	{
 		PenaltyType = Penalty_Silence;
-		PenaltyAlias = "silenced";
-	}
+		
+	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias));
 	
 	int Duration = StringToInt(PenaltyDuration);
 	
@@ -1989,18 +1984,18 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 	{
 		if(Duration == 0)
 		{
-			UC_ShowActivity2(client, PREFIX, "permanently %s %N | Reason: %s", PenaltyAlias, TargetClient, PenaltyReason);
+			UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanently Penalized", PenaltyAlias, TargetClient, PenaltyReason);
 			UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Permanently Penalized", PenaltyAlias, client);
 		}
 		else
 		{
-			UC_ShowActivity2(client, PREFIX, "%s %N for %i minutes | Reason: %s", PenaltyAlias, TargetClient, Duration, PenaltyReason);
+			UC_ShowActivity2(client, PREFIX, "%t", "Activity Temporarily Penalized", PenaltyAlias, TargetClient, Duration, PenaltyReason);
 			UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Temporarily Penalized", PenaltyAlias, client, Duration);
 		}
 	}
 	else
 	{
-		UC_ShowActivity2(client, PREFIX, "%s %N for %i more minutes ( total: %i ) | Reason: %s", PenaltyAlias, TargetClient, Duration, PositiveOrZero((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60), PenaltyReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Extended Temporary Penalty", PenaltyAlias, TargetClient, Duration, PositiveOrZero((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60), PenaltyReason);
 		UC_PrintToChat(TargetClient, "%s%t", "You Are Extended Penalized", PREFIX, PenaltyAlias, client, Duration, PositiveOrZero(((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60)));
 	}	
 	
@@ -2118,20 +2113,16 @@ public Action Command_OfflinePenalty(int client, int args)
 	char PenaltyAlias[32];
 	
 	if(StrEqual(command, "sm_ogag"))
-	{
 		PenaltyType = Penalty_Gag;
-		PenaltyAlias = "gagged";
-	}
+
 	else if(StrEqual(command, "sm_omute"))
-	{
 		PenaltyType = Penalty_Mute;
-		PenaltyAlias = "muted";
-	}
+
 	else if(StrEqual(command, "sm_osilence"))
-	{
 		PenaltyType = Penalty_Silence;
-		PenaltyAlias = "silenced";
-	}
+
+	
+	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias));
 
 
 	int Duration = StringToInt(PenaltyDuration);
