@@ -14,7 +14,8 @@
 	"Plugin"	"Path_SM/plugins/SQLiteBans.smx"
 	"Plugin"	"Path_SM/plugins/SQLiteBans_Discord.smx"
 
+	"Plugin"	"Path_SM/translations/sqlitebans.phrases.txt"
+	
 	"Source"	"Path_SM/scripting/SQLiteBans.sp"
 	"Source"	"Path_SM/scripting/SQLiteBans_Discord.sp"
-	"Source"	"Path_SM/translations/sqlitebans.phrases.txt"
 }
