@@ -199,4 +199,12 @@
 	{
 		"en"	"Comm List"
 	}
+	"Online Comm List"
+	{
+		"en"	"Online Comm List"
+	}
+	"Offline Comm List"
+	{
+		"en"	"Offline Comm List"
+	}
 }

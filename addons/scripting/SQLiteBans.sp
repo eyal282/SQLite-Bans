@@ -2459,9 +2459,15 @@ public Action Command_CommList(int client, int args)
 	if(client == 0)
 		return Plugin_Handled;
 	
-	GetCmdArgString(CommListArg[client], sizeof(CommListArg[]));
-	
-	StripQuotes(CommListArg[client]);
+	if(args == 0)
+		CommListArg[client][0] = EOS;
+		
+	else
+	{
+		GetCmdArgString(CommListArg[client], sizeof(CommListArg[]));
+		
+		StripQuotes(CommListArg[client]);
+	}
 	
 	QueryCommList(client, 0);
 	
@@ -2480,7 +2486,12 @@ public void QueryCommList(int client, int ItemPos)
 	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE DurationMinutes != 0 AND TimestampGiven + (60 * DurationMinutes) < %i", GetTime());
 	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 11);
 		
-	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty > %i AND Penalty < %i ORDER BY TimestampGiven DESC", Penalty_Ban, enPenaltyType_LENGTH); 
+	if(CommListArg[client][0] == EOS)
+		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty > %i AND Penalty < %i ORDER BY TimestampGiven DESC", Penalty_Ban, enPenaltyType_LENGTH);
+
+	else // WHERE 
+		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty > %i AND Penalty < %i AND (PlayerName LIKE '%%%s%%' OR AuthId LIKE '%%%s%%' OR IPAddress LIKE '%%%s%%') ORDER BY TimestampGiven DESC", Penalty_Ban, enPenaltyType_LENGTH, CommListArg[client], CommListArg[client], CommListArg[client]);
+		
 	SQL_TQuery(dbLocal, SQLCB_CommList, sQuery, DP); 
 }
 
@@ -2507,6 +2518,7 @@ public void SQLCB_CommList(Handle db, Handle hndl, const char[] sError, Handle D
 		}
 		char TempFormat[512], AuthId[35], PlayerName[64], AdminAuthId[35], AdminName[64], PenaltyReason[256], ExpirationDate[64];
 		
+		char PenaltyLetter[2];
 		Handle hMenu = CreateMenu(CommList_MenuHandler);
 	
 		Handle Array_Targets = CreateArray(sizeof(enTargets));
@@ -2523,6 +2535,7 @@ public void SQLCB_CommList(Handle db, Handle hndl, const char[] sError, Handle D
 				FormatEx(PlayerName, sizeof(PlayerName), AuthId);
 			
 			enPenaltyType Penalty = view_as<enPenaltyType>(SQL_FetchInt(hndl, 5));
+			
 			SQL_FetchString(hndl, 6, PenaltyReason, sizeof(PenaltyReason));
 			
 			StripQuotes(PenaltyReason);
@@ -2546,10 +2559,22 @@ public void SQLCB_CommList(Handle db, Handle hndl, const char[] sError, Handle D
 			PushArrayArray(Array_Targets, target, sizeof(enTargets));
 			
 			IntToString(view_as<int>(Array_Targets), TempFormat, sizeof(TempFormat));
+			
+			PenaltyAliasByType(Penalty, PenaltyLetter, sizeof(PenaltyLetter), false);
+			
+			PenaltyLetter[1] = EOS;
+			
+			PenaltyLetter[0] = CharToUpper(PenaltyLetter[0]);
+			
+			Format(PlayerName, sizeof(PlayerName), "[%s] %s", PenaltyLetter, PlayerName);
 			AddMenuItem(hMenu, TempFormat, PlayerName);
 		}
 		
-		SetMenuTitle(hMenu, "Communication punishments sorted by date:");
+		if(CommListArg[client][0] == EOS)
+			SetMenuTitle(hMenu, "Communication punishments sorted by date:");
+			
+		else
+			SetMenuTitle(hMenu, "Communication punishments matching %s\n sorted by date:", CommListArg[client]);
 		
 		DisplayMenuAtItem(hMenu, client, ItemPos, MENU_TIME_FOREVER);
 	
@@ -2749,13 +2774,33 @@ public void OnAdminMenuReady(Handle hTemp)
 			ADMFLAG_BAN); // What flag do we need to see the menu option
 	}
 
-	hTopMenu.AddCategory("SQLiteBans - Comm List", AdminMenu_CommList, "sm_unsilence", ADMFLAG_CHAT);
+	TopMenuObject CommList = hTopMenu.AddCategory("SQLiteBans - Comm List", AdminMenu_CommList, "sm_unsilence", ADMFLAG_CHAT);
+	
+	hTopMenu.AddItem("SQLiteBans - Online Comm List", AdminMenu_OnlineCommList, CommList, "sm_unsilence", ADMFLAG_CHAT);
+	hTopMenu.AddItem("SQLiteBans - Offline Comm List", AdminMenu_OfflineCommList, CommList, "sm_unsilence", ADMFLAG_CHAT);
 	
 }
 
-
 // A category of one item.
 public void AdminMenu_CommList(TopMenu topmenu,
+	TopMenuAction action,  // Action being performed
+	TopMenuObject object_id,  // The object ID (if used)
+	int param,  // client idx of admin who chose the option (if used)
+	char[] buffer,  // Output buffer (if used)
+	int maxlength) // Output buffer (if used)
+{
+
+	switch (action)
+	{
+		case TopMenuAction_DisplayOption:
+		{
+			FormatEx(buffer, maxlength, "%T", "Comm List", param);
+		}
+	}
+}
+
+
+public void AdminMenu_OnlineCommList(TopMenu topmenu,
 	TopMenuAction action,  // Action being performed
 	TopMenuObject object_id,  // The object ID (if used)
 	int param,  // client idx of admin who chose the option (if used)
@@ -2767,17 +2812,42 @@ public void AdminMenu_CommList(TopMenu topmenu,
 
 	switch (action)
 	{
-		// A category of one item, directly show the comm list!
+		// We are only being displayed, We only need to show the option name
 		case TopMenuAction_DisplayOption:
 		{
-			FormatEx(buffer, maxlength, "%T", "Comm List", param);
+			FormatEx(buffer, maxlength, "%T", "Online Comm List", param);
 		}
-	
+
 		case TopMenuAction_SelectOption:
 		{
 			DisplayOnlineCommListMenu(param); // Someone chose to ban someone, show the list of users menu
 		}
-		
+	}
+}
+
+
+public void AdminMenu_OfflineCommList(TopMenu topmenu,
+	TopMenuAction action,  // Action being performed
+	TopMenuObject object_id,  // The object ID (if used)
+	int param,  // client idx of admin who chose the option (if used)
+	char[] buffer,  // Output buffer (if used)
+	int maxlength) // Output buffer (if used)
+{
+	/* Clear the Ownreason bool, so he is able to chat again;) */
+	g_ownReasons[param] = false;
+
+	switch (action)
+	{
+		// We are only being displayed, We only need to show the option name
+		case TopMenuAction_DisplayOption:
+		{
+			FormatEx(buffer, maxlength, "%T", "Offline Comm List", param);
+		}
+
+		case TopMenuAction_SelectOption:
+		{
+			QueryCommList(param, 0); // Someone chose to ban someone, show the list of users menu
+		}
 	}
 }
 
