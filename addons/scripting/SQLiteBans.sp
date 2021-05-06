@@ -22,7 +22,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "3.3"
+#define PLUGIN_VERSION "3.5"
 
 
 public Plugin myinfo = 
@@ -69,8 +69,19 @@ enum struct enTargets
 	}
 }
 
+char Colors[][] = 
+{
+	"{NORMAL}", "{RED}", "{GREEN}", "{LIGHTGREEN}", "{OLIVE}", "{LIGHTRED}", "{GRAY}", "{YELLOW}", "{ORANGE}", "{BLUE}", "{PINK}"
+};
+
+char ColorEquivalents[][] =
+{
+	"\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\x07", "\x08", "\x09", "\x10", "\x0C", "\x0E"
+};
+
 Handle dbLocal = INVALID_HANDLE;
 
+Handle hcv_Tag = INVALID_HANDLE;
 Handle hcv_Website = INVALID_HANDLE;
 Handle hcv_LogMethod = INVALID_HANDLE;
 Handle hcv_LogBannedConnects = INVALID_HANDLE;
@@ -86,6 +97,7 @@ Handle fw_OnCommPunishIdentity_Post = INVALID_HANDLE;
 Handle fw_OnUnbanIdentity_Post = INVALID_HANDLE;
 Handle fw_OnCommUnpunishIdentity_Post = INVALID_HANDLE;
 
+bool g_bFakeIdentityAction = false;
 float ExpireBreach = 0.0;
 
 // Unix, setting to -1 makes it permanent.
@@ -103,12 +115,17 @@ Menu ReasonMenuHandle;
 Menu TimeMenuHandle;
 
 int g_BanTarget[MAXPLAYERS+1], g_BanTime[MAXPLAYERS+1];
+int g_CommTarget[MAXPLAYERS + 1];
+
+char CommListArg[MAXPLAYERS + 1][64];
 
 DataPack PlayerDataPack[MAXPLAYERS+1];
 
 char g_BanReasonsPath[PLATFORM_MAX_PATH];
 
 KeyValues g_hKvBanReasons;
+
+char PREFIX[64];
 
 public APLRes AskPluginLoad2(Handle myself, bool bLate, char[] error, int err_max)
 {
@@ -195,7 +212,8 @@ public any Native_CommPunishClient(Handle plugin, int numParams)
 	
 	else
 		SetClientListeningFlags(client, VOICE_NORMAL);
-		
+	
+	g_bFakeIdentityAction = true;
 	return SQLiteBans_CommPunishIdentity(AuthId, PenaltyType, name, time, reason, source, dontExtend);
 }
 
@@ -268,12 +286,16 @@ public any Native_CommPunishIdentity(Handle plugin, int numParams)
 	
 	PenaltyAliasByType(PenaltyType, PenaltyAlias, false);
 	
-	if(time == 0)
-		LogSQLiteBans("Admin %N [AuthId: %s] added a permanent %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, PenaltyAlias, name, AuthId, reason);
-
-	else
-		LogSQLiteBans("Admin %N [AuthId: %s] added a %i minute %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, time, PenaltyAlias, name, AuthId, reason);
+	if(!g_bFakeIdentityAction)
+	{
+		if(time == 0)
+			LogSQLiteBans("Admin %N [AuthId: %s] added a permanent %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, PenaltyAlias, name, AuthId, reason);
 	
+		else
+			LogSQLiteBans("Admin %N [AuthId: %s] added a %i minute %s on %s [AuthId: %s]. Reason: %s", source, AdminAuthId, time, PenaltyAlias, name, AuthId, reason);
+	}
+	
+	g_bFakeIdentityAction = false;
 	
 	Call_StartForward(fw_OnCommPunishIdentity_Post);
 
@@ -343,8 +365,12 @@ public any Native_CommUnpunishClient(Handle plugin, int numParams)
 	
 	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias));
 		
+	g_bFakeIdentityAction = true;
+	
 	SQLiteBans_CommUnpunishIdentity(AuthId, PenaltyType, source);
 	
+	WasGaggedLastCheck[client] = false;
+	WasMutedLastCheck[client] = false;
 	return Plugin_Handled;
 }
 
@@ -392,6 +418,10 @@ public any Native_CommUnpunishIdentity(Handle plugin, int numParams)
 	WritePackCell(DP, PenaltyType);
 	
 	WritePackString(DP, AdminAuthId);
+	
+	WritePackCell(DP, g_bFakeIdentityAction);
+	
+	g_bFakeIdentityAction = false;
 	
 	char sQuery[1024];
 	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty = %i AND AuthId = '%s'", PenaltyType, identity);
@@ -525,7 +555,7 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 		
 		int client = GetEntityOfUserId(UserId);
 		
-		ReplyToCommandBySource(client, CmdReplySource, "[SM] Could not find any %s penalties matching %s", PenaltyAlias, TargetArg);
+		ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "Unpenalty Not Found", PenaltyAlias, TargetArg);
 	}
 	
 	SQL_FetchRow(hndl);
@@ -548,6 +578,8 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 	
 	char AdminAuthId[35];
 	ReadPackString(DP, AdminAuthId, sizeof(AdminAuthId)); // Even if the player disconnects we must log him.
+		
+	bool NextFake = ReadPackCell(DP);
 	
 	CloseHandle(DP);
 	
@@ -556,9 +588,12 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 	char PenaltyAlias[32];
 	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias), false);
 	
-	ReplyToCommandBySource(client, CmdReplySource, "[SM] Successfully deleted all %s penalties matching %s", PenaltyAlias, TargetArg);
+	if(!NextFake)
+	{
+		ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "Unpenalty Success", PenaltyAlias, TargetArg);
 	
-	LogSQLiteBans("Admin %N [AuthId: %s] deleted all %s penalties matching \"%s\"", client, AdminAuthId, PenaltyAlias, TargetArg);
+		LogSQLiteBans("Admin %N [AuthId: %s] deleted all %s penalties matching \"%s\"", client, AdminAuthId, PenaltyAlias, TargetArg);
+	}
 	
 	char AdminName[64];
 	
@@ -585,6 +620,7 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 
 public void OnPluginStart()
 {	
+	LoadTranslations("sqlitebans.phrases");
 	LoadTranslations("common.phrases");
 	LoadTranslations("basebans.phrases");
 	LoadTranslations("core.phrases");
@@ -672,23 +708,15 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_abortban", Command_AbortBan, "sm_abortban");
 	//RegAdminCmd("sm_sqlitebans_backup", Command_Backup, ADMFLAG_ROOT, "Backs up the bans database to an external file");
 	
-	RegConsoleCmd("sm_commstatus", Command_CommStatus, "Gives you information about communication penalties active on you");
-	RegConsoleCmd("sm_comms", Command_CommStatus, "Gives you information about communication penalties active on you");
+	//RegConsoleCmd("sm_commstatus", Command_CommStatus, "Gives you information about communication penalties active on you");
+	//RegConsoleCmd("sm_comms", Command_CommStatus, "Gives you information about communication penalties active on you");
 	
 	#if defined _autoexecconfig_included
 	
 	AutoExecConfig_SetFile("SQLiteBans");
 	
 	#endif
-	
-	hcv_Website = UC_CreateConVar("sqlite_bans_url", "http://yourwebsite.com", "Url to direct banned players to go to if they wish to appeal their ban");
-	hcv_LogMethod = UC_CreateConVar("sqlite_bans_log_method", "1", "0 - Log in the painful to look at \"L20190412.log\" files. 1 - Log in a seperate file, in sourcemod/logs/SQLiteBans.log");
-	hcv_LogBannedConnects = UC_CreateConVar("sqlite_bans_log_banned_connects", "0", "0 - Don't. 1 - Log whenever a banned player attempts to join the server");
-	hcv_DefaultGagTime = UC_CreateConVar("sqlite_bans_default_gag_time", "7", "If a plugin uses a basecomm native to gag a player, this is how long the gag will last");
-	hcv_DefaultMuteTime = UC_CreateConVar("sqlite_bans_default_mute_time", "7", "If a plugin uses a basecomm native to mute a player, this is how long the mute will last");
-	
-	hcv_Deadtalk = UC_CreateConVar("sm_deadtalk", "0", "Controls how dead communicate. 0 - Off. 1 - Dead players ignore teams. 2 - Dead players talk to living teammates.", 0, true, 0.0, true, 2.0);
-	
+
 	#if defined _autoexecconfig_included
 	
 	AutoExecConfig_ExecuteFile();
@@ -696,20 +724,6 @@ public void OnPluginStart()
 	AutoExecConfig_CleanFile();
 	
 	#endif
-	
-	hcv_Alltalk = FindConVar("sv_alltalk");
-	
-	HookConVarChange(hcv_Deadtalk, hcvChange_Deadtalk);
-	HookConVarChange(hcv_Alltalk, hcvChange_Alltalk);
-	
-	char Value[64];
-	GetConVarString(hcv_Deadtalk, Value, sizeof(Value));
-	
-	hcvChange_Deadtalk(hcv_Deadtalk, Value, Value);
-	
-	GetConVarString(hcv_Alltalk, Value, sizeof(Value));
-	
-	hcvChange_Alltalk(hcv_Alltalk, Value, Value);
 		
 	char LogPath[256];
 	
@@ -756,12 +770,43 @@ public void OnConfigsExecuted()
 
 public void OnAllPluginsLoaded()
 {
+	hcv_Tag = UC_CreateConVar("sqlite_bans_tag", "[{RED}SQLiteBans{NORMAL}] {NORMAL}", _, FCVAR_PROTECTED);
+	hcv_Website = UC_CreateConVar("sqlite_bans_url", "http://yourwebsite.com", "Url to direct banned players to go to if they wish to appeal their ban", FCVAR_PROTECTED);
+	hcv_LogMethod = UC_CreateConVar("sqlite_bans_log_method", "1", "0 - Log in the painful to look at \"L20190412.log\" files. 1 - Log in a seperate file, in sourcemod/logs/SQLiteBans.log", FCVAR_PROTECTED);
+	hcv_LogBannedConnects = UC_CreateConVar("sqlite_bans_log_banned_connects", "0", "0 - Don't. 1 - Log whenever a banned player attempts to join the server", FCVAR_PROTECTED);
+	hcv_DefaultGagTime = UC_CreateConVar("sqlite_bans_default_gag_time", "7", "If a plugin uses a basecomm native to gag a player, this is how long the gag will last", FCVAR_PROTECTED);
+	hcv_DefaultMuteTime = UC_CreateConVar("sqlite_bans_default_mute_time", "7", "If a plugin uses a basecomm native to mute a player, this is how long the mute will last", FCVAR_PROTECTED);
+	
+	hcv_Deadtalk = UC_CreateConVar("sm_deadtalk", "0", "Controls how dead communicate. 0 - Off. 1 - Dead players ignore teams. 2 - Dead players talk to living teammates.", 0, true, 0.0, true, 2.0);
+
+	hcv_Alltalk = FindConVar("sv_alltalk");
+	
+	GetConVarString(hcv_Tag, PREFIX, sizeof(PREFIX));
+	HookConVarChange(hcv_Tag, hcvChange_Tag);
+	
+	HookConVarChange(hcv_Deadtalk, hcvChange_Deadtalk);
+	HookConVarChange(hcv_Alltalk, hcvChange_Alltalk);
+	
+	char Value[64];
+	GetConVarString(hcv_Deadtalk, Value, sizeof(Value));
+	
+	hcvChange_Deadtalk(hcv_Deadtalk, Value, Value);
+	
+	GetConVarString(hcv_Alltalk, Value, sizeof(Value));
+	
+	hcvChange_Alltalk(hcv_Alltalk, Value, Value);
 	TopMenu topmenu;
 
 	if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE))
 	{
 		OnAdminMenuReady(topmenu);
 	}
+}
+
+
+public void hcvChange_Tag(Handle convar, const char[] oldValue, const char[] newValue)
+{
+	FormatEx(PREFIX, sizeof(PREFIX), newValue);
 }
 
 void LoadBanReasons()
@@ -864,13 +909,13 @@ public Action Timer_CheckCommStatus(Handle hTimer)
 			WasMuted = true;
 			
 		if(WasGagged && WasMuted)
-			PrintToChat(i, "[SM] Your silence penalty has expired.");
+			UC_PrintToChat(i, "%s%t", PREFIX, "Silence Expired");
 			
 		else if(WasGagged)
-			PrintToChat(i, "[SM] Your gag penalty has expired.");
+			UC_PrintToChat(i, "%s%t", PREFIX, "Gag Expired");
 			
 		else if(WasMuted)
-			PrintToChat(i, "[SM] Your mute penalty has expired.");
+			UC_PrintToChat(i, "%s%t", PREFIX, "Mute Expired");
 			
 		if(WasMuted)
 		{
@@ -891,9 +936,9 @@ public Action Timer_CheckCommStatus(Handle hTimer)
 				}
 			}
 		}	
+		
 		WasGaggedLastCheck[i] = IsClientChatGagged(i);
 		WasMutedLastCheck[i] = IsClientVoiceMuted(i);
-			
 		
 	}
 }
@@ -918,10 +963,10 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 	if(IsClientChatGagged(client, Expire, permanent))
 	{
 		if(permanent)
-			PrintToChat(client, "[SM] You have been gagged. It will never expire");
+			UC_PrintToChat(client, "%s%t", PREFIX, "Gag Indicator - Permanent");
 		
 		else
-			PrintToChat(client, "[SM] You have been gagged. It will expire in %i minutes", RoundToFloor((float((Expire - GetTime())) / 60.0) - 0.1) + 1);
+			UC_PrintToChat(client, "%s%t", PREFIX, "Gag Indicator - Permanent", RoundToFloor((float((Expire - GetTime())) / 60.0) - 0.1) + 1);
 			
 		return Plugin_Stop;
 	}
@@ -1089,7 +1134,7 @@ public void SQLCB_IdentityBanned(Handle db, Handle hndl, const char[] sError, Ha
 	
 	if(SQL_GetAffectedRows(hndl) == 0)
 	{
-		ReplyToCommand(source, "[SM] Target %s is already banned!", Name);
+		UC_ReplyToCommand(source, "%s%t", PREFIX, "Target Already Banned", Name);
 		
 		return;
 	}
@@ -1215,6 +1260,15 @@ public void OnClientDisconnect(int client)
 		ExpirePenalty[client][i] = 0;
 		
 	g_ownReasons[client] = false;
+	
+	for (int i = 1; i <= MaxClients;i++)
+	{
+		if(g_BanTarget[i] == client)
+			g_BanTarget[i] = 0;
+			
+		if(g_CommTarget[i] == client)
+			g_CommTarget[i] = 0;
+	}
 }
 
 public void OnClientConnected(int client)
@@ -1373,18 +1427,18 @@ public Action Command_AbortBan(int client, int args)
 {
 	if(!CheckCommandAccess(client, "sm_ban", ADMFLAG_BAN))
 	{
-		ReplyToCommand(client, "[SM] %t", "No Access");
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "No Access");
 		return Plugin_Handled;
 	}
 	
 	if(g_ownReasons[client])
 	{
 		g_ownReasons[client] = false;
-		ReplyToCommand(client, "[SM] %t", "AbortBan applied successfully");
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "AbortBan applied successfully");
 	}
 	else
 	{
-		ReplyToCommand(client, "[SM] %t", "AbortBan not waiting for custom reason");
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "AbortBan not waiting for custom reason");
 	}
 	
 	return Plugin_Handled;
@@ -1394,12 +1448,12 @@ public Action Command_Ban(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		ReplyToCommand(client, "[SM] You need to disable ban breach by using !kickbreach before banning a client.");
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Ban - Ban Breach");
 		return Plugin_Handled;
 	}	
 	else if(args == 0)
 	{
-		ReplyToCommand(client, "[SM] Note: The ban menu will steamid & IP ban the client.");
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Ban Menu - Full Ban Note");
 		
 		DisplayBanTargetMenu(client);
 		
@@ -1407,7 +1461,11 @@ public Action Command_Ban(int client, int args)
 	}
 	else if(args < 2)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_ban <#userid|name> <time> [reason]");
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", arg0);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -1465,10 +1523,10 @@ public Action Command_Ban(int client, int args)
 	GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 	
 	if(Duration == 0)
-		ShowActivity2(client, "[SM] ", "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanently Banned", TargetClient, BanReason);
 
 	else
-		ShowActivity2(client, "[SM] ", "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Temporarily Banned", TargetClient, Duration, BanReason);
 		
 	return Plugin_Handled;
 }
@@ -1477,12 +1535,12 @@ public Action Command_BanIP(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		ReplyToCommand(client, "[SM] You need to disable ban breach by using !kickbreach before banning a client.");
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Ban - Ban Breach");
 		return Plugin_Handled;
 	}	
 	else if(args == 0)
 	{
-		ReplyToCommand(client, "[SM] Note: The ban menu will steamid & IP ban the client.");
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Ban Menu - Full Ban Note");
 		
 		DisplayBanTargetMenu(client);
 		
@@ -1490,7 +1548,11 @@ public Action Command_BanIP(int client, int args)
 	}
 	else if(args < 2)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_banip <#userid|name> <time> [reason]");
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", arg0);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -1547,10 +1609,10 @@ public Action Command_BanIP(int client, int args)
 	GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 	
 	if(Duration == 0)
-		ShowActivity2(client, "[SM] ", "permanently banned %N for the reason \"%s\"", TargetClient, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanently Banned", TargetClient, BanReason);
 
 	else
-		ShowActivity2(client, "[SM] ", "banned %N for %i minutes for the reason \"%s\"", TargetClient, Duration, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Temporarily Banned", TargetClient, Duration, BanReason);
 
 	
 	return Plugin_Handled;
@@ -1560,7 +1622,7 @@ public Action Command_FullBan(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		ReplyToCommand(client, "[SM] You need to disable ban breach by using !kickbreach before banning a client.");
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Ban - Ban Breach");
 		return Plugin_Handled;
 	}
 	else if(args == 0)
@@ -1571,7 +1633,11 @@ public Action Command_FullBan(int client, int args)
 	}
 	else if(args < 2)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_fban <#userid|name> <time> [reason]");
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", arg0);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -1625,10 +1691,10 @@ public Action Command_FullBan(int client, int args)
 	BanClient(TargetClient, Duration, BANFLAG_AUTO|BANFLAG_NOKICK, BanReason, "KICK!!!", ArgStr, client);
 	
 	if(Duration == 0)
-		ShowActivity2(client, "[SM] ", "permanently banned %N", TargetClient);
-		
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanently Banned", TargetClient, BanReason);
+
 	else
-		ShowActivity2(client, "[SM] ", "banned %N for %i minutes", TargetClient, Duration);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Temporarily Banned", TargetClient, Duration, BanReason);
 		
 	char AuthId[35], AdminAuthId[35], IPAddress[32];
 	GetClientIP(TargetClient, IPAddress, sizeof(IPAddress), true);
@@ -1644,12 +1710,16 @@ public Action Command_AddBan(int client, int args)
 {
 	if(ExpireBreach != 0.0)
 	{	
-		ReplyToCommand(client, "[SM] You need to disable ban breach by using !kickbreach before banning a client.");
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Ban - Ban Breach");
 		return Plugin_Handled;
 	}	
 	if(args < 2)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_addban <steamid|ip> <minutes|0> [reason]");
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Add Ban", arg0);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -1659,6 +1729,16 @@ public Action Command_AddBan(int client, int args)
 	GetCmdArgString(ArgStr, sizeof(ArgStr));
 	
 	int len = BreakString(ArgStr, TargetArg, sizeof(TargetArg));
+	
+	if(len == -1)
+	{
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Add Ban", arg0);
+		
+		return Plugin_Handled;
+	}	
 	
 	int len2 = BreakString(ArgStr[len], BanDuration, sizeof(BanDuration));
 	
@@ -1677,8 +1757,6 @@ public Action Command_AddBan(int client, int args)
 	int Duration = StringToInt(BanDuration);
 	// This is the function to ban an identity with source being the banning client or 0 for console. If you want my plugin to use its own kicking mechanism, add BANFLAG_NOKICK and set the kick reason to anything apart from ""
 	BanIdentity(TargetArg, Duration, flags, BanReason, "sm_addban", client); 
-		
-	ReplyToCommand(client, "[SM] Added %s to the ban list", TargetArg);
 	
 	char AdminAuthId[35];
 	
@@ -1689,10 +1767,10 @@ public Action Command_AddBan(int client, int args)
 		GetClientAuthId(client, AuthId_Steam2, AdminAuthId, sizeof(AdminAuthId));
 
 	if(Duration == 0)
-		ShowActivity2(client, "[SM] ", "added a permanent ban on identity %s. Reason: %s", TargetArg, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanent Identity Ban", TargetArg, BanReason);
 
 	else
-		ShowActivity2(client, "[SM] ", "added a %i minute ban on identity: %s", Duration, BanReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanent Identity Ban", Duration, BanReason);
 
 	return Plugin_Handled;
 }
@@ -1701,7 +1779,11 @@ public Action Command_Unban(int client, int args)
 {
 	if(args == 0)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_unban <steamid|ip>");
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Unban", arg0);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -1712,7 +1794,11 @@ public Action Command_Unban(int client, int args)
 	
 	if(TargetArg[0] == EOS)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_unban <steamid|ip>");
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Unban", arg0);
+		
 		return Plugin_Handled;
 	}
 	
@@ -1763,7 +1849,7 @@ public void SQLCB_Unban_FindBans(Handle db, Handle hndl, const char[] sError, Ha
 		CloseHandle(DP);
 		int client = GetEntityOfUserId(UserId);
 		
-		ReplyToCommandBySource(client, CmdReplySource, "[SM] Could not find any bans matching %s", TargetArg);
+		ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "No bans found", TargetArg);
 	}
 	
 	SQL_FetchRow(hndl);
@@ -1788,7 +1874,7 @@ public void SQLCB_Unban_FindBans(Handle db, Handle hndl, const char[] sError, Ha
 	
 	int client = GetEntityOfUserId(UserId);
 	
-	ReplyToCommandBySource(client, CmdReplySource, "[SM] Successfully deleted all bans matching %s", TargetArg);
+	ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "Ban Deleted", TargetArg);
 	
 	LogSQLiteBans("Admin %N [AuthId: %s] deleted all bans matching \"%s\"", client, AdminAuthId, TargetArg);
 	
@@ -1826,7 +1912,8 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 		
 	if(args < 2)
 	{
-		ReplyToCommand(client, "[SM] Usage: %s <#userid|name> <minutes|0> [reason]", command);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Ban", command);
+		
 		return Plugin_Stop;
 	}	
 	
@@ -1864,20 +1951,15 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 	char PenaltyAlias[32];
 	enPenaltyType PenaltyType;
 	if(StrEqual(command, "sm_gag"))
-	{
 		PenaltyType = Penalty_Gag;
-		PenaltyAlias = "gagged";
-	}
+
 	else if(StrEqual(command, "sm_mute"))
-	{
 		PenaltyType = Penalty_Mute;
-		PenaltyAlias = "muted";
-	}
+
 	else if(StrEqual(command, "sm_silence"))
-	{
 		PenaltyType = Penalty_Silence;
-		PenaltyAlias = "silenced";
-	}
+		
+	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias));
 	
 	int Duration = StringToInt(PenaltyDuration);
 	
@@ -1895,39 +1977,40 @@ public Action Listener_Penalty(int client, const char[] command, int args)
 
 	if(Expire == -1)
 	{
-		ReplyToCommand(client, "[SM] Cannot extend penalty on a permanently %s client.", PenaltyAlias);
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Extend Permanent Penalty", PenaltyAlias);
 		return Plugin_Stop;
 	}
 	
 	if(!IsClientAuthorized(TargetClient))
 	{
-		ReplyToCommand(client, "[SM] Error: Could not authenticate %N.", TargetClient);
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Cannot Authenticate Error", TargetClient);
 		return Plugin_Stop;
 	}
 	
 	if(!SQLiteBans_CommPunishClient(TargetClient, PenaltyType, Duration, PenaltyReason, client, false))
 		return Plugin_Stop;
 
-	if(!Extended)
+	if(!Extended || Duration == 0)
 	{
 		if(Duration == 0)
 		{
-			PrintToChat(TargetClient, "[SM] You have been permanently %s by %N.", PenaltyAlias, client);
-			ShowActivity2(client, "[SM] ", "permanently %s %N | Reason: %s", PenaltyAlias, TargetClient, PenaltyReason);
+			UC_ShowActivity2(client, PREFIX, "%t", "Activity Permanently Penalized", PenaltyAlias, TargetClient, PenaltyReason);
+			UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Permanently Penalized", PenaltyAlias, client);
 		}
 		else
 		{
-			PrintToChat(TargetClient, "[SM] You have been %s by %N for %i minutes.", PenaltyAlias, client, Duration);
-			ShowActivity2(client, "[SM] ", "%s %N for %i minutes | Reason: %s", PenaltyAlias, TargetClient, Duration, PenaltyReason);
+			UC_ShowActivity2(client, PREFIX, "%t", "Activity Temporarily Penalized", PenaltyAlias, TargetClient, Duration, PenaltyReason);
+			UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Temporarily Penalized", PenaltyAlias, client, Duration);
 		}
 	}
 	else
 	{
-		PrintToChat(TargetClient, "[SM] You have been %s by %N for %i more minutes ( total: %i )", PenaltyAlias, client, Duration, PositiveOrZero(((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60)));
-		ShowActivity2(client, "[SM] ", "%s %N for %i more minutes ( total: %i ) | Reason: %s", PenaltyAlias, TargetClient, Duration, PositiveOrZero((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60), PenaltyReason);
+		UC_ShowActivity2(client, PREFIX, "%t", "Activity Extended Temporary Penalty", PenaltyAlias, TargetClient, Duration, PositiveOrZero((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60), PenaltyReason);
+		UC_PrintToChat(TargetClient, "%s%t", "You Are Extended Penalized", PREFIX, PenaltyAlias, client, Duration, PositiveOrZero(((ExpirePenalty[TargetClient][PenaltyType] - GetTime()) / 60)));
 	}	
 	
-	PrintToChat(TargetClient, "[SM] Reason: %s", PenaltyReason);
+	UC_PrintToChat(TargetClient, "%s%t", PREFIX, "Reason New Line", PenaltyReason);
 	
 	return Plugin_Stop;
 }
@@ -1940,7 +2023,11 @@ public Action Listener_Unpenalty(int client, const char[] command, int args)
 		
 	if(args == 0)
 	{
-		ReplyToCommand(client, "[SM] Usage: %s <#userid|name>", command);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Unban", arg0);
+
 		return Plugin_Stop;
 	}	
 	
@@ -1957,7 +2044,7 @@ public Action Listener_Unpenalty(int client, const char[] command, int args)
 		client, 
 		target_list, 
 		sizeof(target_list), 
-		COMMAND_FILTER_CONNECTED|COMMAND_FILTER_NO_BOTS,
+		COMMAND_FILTER_CONNECTED|COMMAND_FILTER_NO_BOTS|COMMAND_FILTER_NO_MULTI,
 		target_name,
 		sizeof(target_name),
 		tn_is_ml)) <= 0)
@@ -1984,17 +2071,23 @@ public Action Listener_Unpenalty(int client, const char[] command, int args)
 		PenaltyType = Penalty_Silence;
 		PenaltyAlias = "unsilenced";
 	}
+
+	TargetClient = target_list[0];
 	
-	for(int i=0;i < target_count;i++)
+	if(!IsClientPenalized(TargetClient, PenaltyType))
 	{
-		TargetClient = target_list[i];
+		PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias));
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Target Not Penalized", TargetClient, PenaltyAlias);
+	}
 		
-		PrintToChat(TargetClient, "[SM] You have been %s by %N", PenaltyAlias, client);
+	else
+	{
+		UC_ShowActivity2(client, PREFIX, "%s %s", PenaltyAlias, target_name);
 		
+		UC_PrintToChat(TargetClient, "%s%t", PREFIX, "You Are Unpenalized", PenaltyAlias, client);
+	
 		SQLiteBans_CommUnpunishClient(TargetClient, PenaltyType, client);
 	}
-
-	ShowActivity2(client, "[SM] ", "%s %s", PenaltyAlias, target_name);
 		
 	return Plugin_Stop;
 }
@@ -2007,7 +2100,11 @@ public Action Command_OfflinePenalty(int client, int args)
 	
 	if(args < 2)
 	{
-		ReplyToCommand(client, "[SM] Usage: %s <steamid> <minutes|0> [reason]", command);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Offline Penalty", command);
+		
 		return Plugin_Handled;
 	}	
 
@@ -2027,20 +2124,16 @@ public Action Command_OfflinePenalty(int client, int args)
 	char PenaltyAlias[32];
 	
 	if(StrEqual(command, "sm_ogag"))
-	{
 		PenaltyType = Penalty_Gag;
-		PenaltyAlias = "gagged";
-	}
+
 	else if(StrEqual(command, "sm_omute"))
-	{
 		PenaltyType = Penalty_Mute;
-		PenaltyAlias = "muted";
-	}
+
 	else if(StrEqual(command, "sm_osilence"))
-	{
 		PenaltyType = Penalty_Silence;
-		PenaltyAlias = "silenced";
-	}
+
+	
+	PenaltyAliasByType(PenaltyType, PenaltyAlias, sizeof(PenaltyAlias));
 
 
 	int Duration = StringToInt(PenaltyDuration);
@@ -2049,17 +2142,15 @@ public Action Command_OfflinePenalty(int client, int args)
 	{
 		if(Duration != 0)
 		{
-			ReplyToCommand(client, "[SM] Successfully %s steamid %s for %i minutes.", PenaltyAlias, TargetArg, Duration);
-			ReplyToCommand(client, "[SM] Note: Using this command on an already %s player will extend the duration", PenaltyAlias);
+			
+			UC_ReplyToCommand(client, "%s%t", PREFIX, "Temporary Offline Penalty Success", PenaltyAlias, TargetArg, Duration);
+			UC_ReplyToCommand(client, "%s%t", PREFIX, "Temporary Offline Penalty Note", PenaltyAlias);
 		}	
 		else
-			ReplyToCommand(client, "[SM] Successfully %s steamid %s permanently", PenaltyAlias, TargetArg);
+			UC_ReplyToCommand(client, "%s%t", PREFIX, "Permanently Offline Penalty Success", PenaltyAlias, TargetArg);
 			
 	}
-	else
-	{
-		ReplyToCommand(client, "[SM] Could not %s steamid %s", PenaltyAlias, TargetArg);
-	}
+	
 	return Plugin_Handled;
 }
 
@@ -2070,7 +2161,11 @@ public Action Command_OfflineUnpenalty(int client, int args)
 	GetCmdArg(0, command, sizeof(command));
 	if(args == 0)
 	{
-		ReplyToCommand(client, "[SM] Usage: %s <steamid>", command);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Offline Unpenalty", command);
+		
 		return Plugin_Handled;
 	}	
 	
@@ -2080,7 +2175,11 @@ public Action Command_OfflineUnpenalty(int client, int args)
 	
 	if(TargetArg[0] == EOS)
 	{
-		ReplyToCommand(client, "[SM] Usage: %s <steamid>", command);
+		char arg0[65];
+		GetCmdArg(0, arg0, sizeof(arg0));
+		
+		UC_ReplyToCommand(client, "%s%t", PREFIX, "Command Usage Offline Unpenalty", command);
+		
 		return Plugin_Handled;
 	}
 	
@@ -2099,40 +2198,7 @@ public Action Command_OfflineUnpenalty(int client, int args)
 	
 	return Plugin_Handled;
 }
-
-
-public void SQLCB_Unpenalty(Handle db, Handle hndl, const char[] sError, Handle DP)
-{
-	if(hndl == null)
-	{
-		CloseHandle(DP);
-		ThrowError(sError);
-    }
-	
-	ResetPack(DP);
-	
-	int UserId = ReadPackCell(DP);
-	
-	ReplySource CmdReplySource = ReadPackCell(DP);
-	
-	char TargetArg[64];
-	ReadPackString(DP, TargetArg, sizeof(TargetArg));
-	
-	CloseHandle(DP);
-	int client = (UserId == 0 ? 0 : GetClientOfUserId(UserId));
-	
-	if(client == 0)
-		CmdReplySource = SM_REPLY_TO_CONSOLE;
-	
-	ReplySource PrevReplySource = GetCmdReplySource();
-	
-	SetCmdReplySource(CmdReplySource);
-	
-	ReplyToCommand(client, "[SM] Successfully deleted %i penalties matching %s", SQL_GetAffectedRows(hndl), TargetArg);
-	
-	SetCmdReplySource(PrevReplySource);
-}
-
+/*
 public Action Command_CommStatus(int client, int args)
 {
 	char ExpirationDate[64];
@@ -2147,7 +2213,7 @@ public Action Command_CommStatus(int client, int args)
 		MinutesLeft = 0;
 	}	
 	
-	PrintToChat(client, "[SM] Gagged: %s, Expiration: %s ( %i minutes )", Gagged ? "Yes" : "No", ExpirationDate, MinutesLeft);
+	UC_PrintToChat(client, "%sGagged: %s, Expiration: %s ( %i minutes )", PREFIX, Gagged ? "Yes" : "No", ExpirationDate, MinutesLeft);
 	
 	bool Muted = IsClientVoiceMuted(client, Expire);
 	
@@ -2160,11 +2226,11 @@ public Action Command_CommStatus(int client, int args)
 		MinutesLeft = 0;
 	}	
 	
-	PrintToChat(client, "[SM] Muted: %s, Expiration: %s ( %i minutes )", Muted ? "Yes" : "No", ExpirationDate, MinutesLeft);
+	UC_PrintToChat(client, "%sMuted: %s, Expiration: %s ( %i minutes )", PREFIX, Muted ? "Yes" : "No", ExpirationDate, MinutesLeft);
 	
 	return Plugin_Handled;
 }
-
+*/
 public Action Command_BanList(int client, int args)
 {
 	if(client == 0)
@@ -2210,8 +2276,8 @@ public void SQLCB_BanList(Handle db, Handle hndl, const char[] sError, Handle DP
 	{
 		if(SQL_GetRowCount(hndl) == 0)
 		{
-			PrintToChat(client, "[SM] There are no banned clients from the server");
-			PrintToConsole(client, "[SM] There are no banned clients from the server");
+			UC_PrintToChat(client, "%s%t", PREFIX, "No Bans At All");
+			UC_PrintToConsole(client, "%s%t", PREFIX, "No Bans At All");
 		}
 		
 		char TempFormat[64], AuthId[35], IPAddress[32], PlayerName[64], AdminAuthId[35], AdminName[64], BanReason[256], ExpirationDate[64];
@@ -2239,7 +2305,7 @@ public void SQLCB_BanList(Handle db, Handle hndl, const char[] sError, Handle DP
 			if(BanExpiration <= 0)
 			{
 				BanExpiration = 0;
-				FormatEx(ExpirationDate, sizeof(ExpirationDate), "Never");
+				FormatEx(ExpirationDate, sizeof(ExpirationDate), "∞");
 			}
 			
 			target.init(PlayerName, AuthId, IPAddress, AdminName, AdminAuthId, ExpirationDate, BanReason);
@@ -2393,6 +2459,16 @@ public Action Command_CommList(int client, int args)
 	if(client == 0)
 		return Plugin_Handled;
 	
+	if(args == 0)
+		CommListArg[client][0] = EOS;
+		
+	else
+	{
+		GetCmdArgString(CommListArg[client], sizeof(CommListArg[]));
+		
+		StripQuotes(CommListArg[client]);
+	}
+	
 	QueryCommList(client, 0);
 	
 	return Plugin_Handled;
@@ -2410,7 +2486,12 @@ public void QueryCommList(int client, int ItemPos)
 	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE DurationMinutes != 0 AND TimestampGiven + (60 * DurationMinutes) < %i", GetTime());
 	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 11);
 		
-	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty > %i AND Penalty < %i ORDER BY TimestampGiven DESC", Penalty_Ban, enPenaltyType_LENGTH); 
+	if(CommListArg[client][0] == EOS)
+		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty > %i AND Penalty < %i ORDER BY TimestampGiven DESC", Penalty_Ban, enPenaltyType_LENGTH);
+
+	else // WHERE 
+		SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "SELECT * FROM SQLiteBans_players WHERE Penalty > %i AND Penalty < %i AND (PlayerName LIKE '%%%s%%' OR AuthId LIKE '%%%s%%' OR IPAddress LIKE '%%%s%%') ORDER BY TimestampGiven DESC", Penalty_Ban, enPenaltyType_LENGTH, CommListArg[client], CommListArg[client], CommListArg[client]);
+		
 	SQL_TQuery(dbLocal, SQLCB_CommList, sQuery, DP); 
 }
 
@@ -2432,11 +2513,12 @@ public void SQLCB_CommList(Handle db, Handle hndl, const char[] sError, Handle D
 	{
 		if(SQL_GetRowCount(hndl) == 0)
 		{
-			PrintToChat(client, "[SM] There are no communication punished clients in the server");
-			PrintToConsole(client, "[SM] There are no communication punished clients in the server");
+			UC_PrintToChat(client, "%s%t", PREFIX, "No Penalties At All");
+			UC_PrintToConsole(client, "%s%t", PREFIX, "No Penalties At All");
 		}
 		char TempFormat[512], AuthId[35], PlayerName[64], AdminAuthId[35], AdminName[64], PenaltyReason[256], ExpirationDate[64];
 		
+		char PenaltyLetter[2];
 		Handle hMenu = CreateMenu(CommList_MenuHandler);
 	
 		Handle Array_Targets = CreateArray(sizeof(enTargets));
@@ -2453,6 +2535,7 @@ public void SQLCB_CommList(Handle db, Handle hndl, const char[] sError, Handle D
 				FormatEx(PlayerName, sizeof(PlayerName), AuthId);
 			
 			enPenaltyType Penalty = view_as<enPenaltyType>(SQL_FetchInt(hndl, 5));
+			
 			SQL_FetchString(hndl, 6, PenaltyReason, sizeof(PenaltyReason));
 			
 			StripQuotes(PenaltyReason);
@@ -2464,7 +2547,7 @@ public void SQLCB_CommList(Handle db, Handle hndl, const char[] sError, Handle D
 			if(PenaltyExpiration <= 0)
 			{
 				PenaltyExpiration = 0;
-				FormatEx(ExpirationDate, sizeof(ExpirationDate), "Never");
+				FormatEx(ExpirationDate, sizeof(ExpirationDate), "∞");
 			}
 			
 			target.init(PlayerName, AuthId, "", AdminName, AdminAuthId, ExpirationDate, PenaltyReason, Penalty);
@@ -2476,10 +2559,22 @@ public void SQLCB_CommList(Handle db, Handle hndl, const char[] sError, Handle D
 			PushArrayArray(Array_Targets, target, sizeof(enTargets));
 			
 			IntToString(view_as<int>(Array_Targets), TempFormat, sizeof(TempFormat));
+			
+			PenaltyAliasByType(Penalty, PenaltyLetter, sizeof(PenaltyLetter), false);
+			
+			PenaltyLetter[1] = EOS;
+			
+			PenaltyLetter[0] = CharToUpper(PenaltyLetter[0]);
+			
+			Format(PlayerName, sizeof(PlayerName), "[%s] %s", PenaltyLetter, PlayerName);
 			AddMenuItem(hMenu, TempFormat, PlayerName);
 		}
 		
-		SetMenuTitle(hMenu, "Communication punishments sorted by date:");
+		if(CommListArg[client][0] == EOS)
+			SetMenuTitle(hMenu, "Communication punishments sorted by date:");
+			
+		else
+			SetMenuTitle(hMenu, "Communication punishments matching %s\n sorted by date:", CommListArg[client]);
 		
 		DisplayMenuAtItem(hMenu, client, ItemPos, MENU_TIME_FOREVER);
 	
@@ -2612,17 +2707,16 @@ public int CommListTargetInfo_MenuHandler(Handle hMenu, MenuAction action, int c
 			}
 		}
 	}
-	
 }
 
 public Action Command_BreachBans(int client, int args)
 {
 	ExpireBreach = GetGameTime() + 60.0;
+
+	UC_PrintToChatAdmins("%s%t", PREFIX, "Announce Ban Breach", client);
+	UC_PrintToChatAdmins("%s%t", PREFIX, "Announce Ban Breach Part 2");
 	
-	PrintToChatAll("[SM] Admin %N started a ban breach for testing purposes", client);
-	PrintToChatAll("[SM] All banned players can join for the next 60 seconds");
-	
-	ReplyToCommand(client, "[SM] Don't forget to !kickbreach to kick all banned players inside the server.");
+	UC_ReplyToCommand(client, "%s%t", PREFIX, "Ban Breach Reminder");
 	
 	LogSQLiteBans("Admin %N started a 60 second ban breach", client);
 	
@@ -2644,7 +2738,8 @@ public Action Command_KickBreach(int client, int args)
 		FindClientPenalties(i);
 	}
 
-	PrintToChatAll("[SM] Admin %N kicked all breaching clients", client);
+	
+	UC_PrintToChatAdmins("%s%t", PREFIX, "Announce Kick Breach", client);
 	LogSQLiteBans("Admin %N kicked all ban breaching clients", client);
 	
 	return Plugin_Handled;
@@ -2656,9 +2751,6 @@ public Action Command_KickBreach(int client, int args)
 public void OnAdminMenuReady(Handle hTemp)
 {
 	TopMenu topmenu = view_as<TopMenu>(hTemp);
-	#if defined DEBUG
-	LogToFile(logFile, "OnAdminMenuReady()");
-	#endif
 
 	/* Block us from being called twice */
 	if (topmenu == hTopMenu)
@@ -2674,27 +2766,172 @@ public void OnAdminMenuReady(Handle hTemp)
 
 	if (player_commands != INVALID_TOPMENUOBJECT)
 	{
-		// just to avoid "unused variable 'res'" warning
-		#if defined DEBUG
-		TopMenuObject res = hTopMenu.AddItem(
-			"sm_ban",  // Name
-			AdminMenu_Ban,  // Handler function
-			player_commands,  // We are a submenu of Player Commands
-			"sm_ban",  // The command to be finally called (Override checks)
-			ADMFLAG_BAN); // What flag do we need to see the menu option
-		char temp[125];
-		Format(temp, 125, "Result of AddToTopMenu: %d", res);
-		LogToFile(logFile, temp);
-		LogToFile(logFile, "Added Ban option to admin menu");
-		#else
 		hTopMenu.AddItem(
 			"sm_ban",  // Name
 			AdminMenu_Ban,  // Handler function
 			player_commands,  // We are a submenu of Player Commands
 			"sm_ban",  // The command to be finally called (Override checks)
 			ADMFLAG_BAN); // What flag do we need to see the menu option
-		#endif
 	}
+
+	TopMenuObject CommList = hTopMenu.AddCategory("SQLiteBans - Comm List", AdminMenu_CommList, "sm_unsilence", ADMFLAG_CHAT);
+	
+	hTopMenu.AddItem("SQLiteBans - Online Comm List", AdminMenu_OnlineCommList, CommList, "sm_unsilence", ADMFLAG_CHAT);
+	hTopMenu.AddItem("SQLiteBans - Offline Comm List", AdminMenu_OfflineCommList, CommList, "sm_unsilence", ADMFLAG_CHAT);
+	
+}
+
+// A category of one item.
+public void AdminMenu_CommList(TopMenu topmenu,
+	TopMenuAction action,  // Action being performed
+	TopMenuObject object_id,  // The object ID (if used)
+	int param,  // client idx of admin who chose the option (if used)
+	char[] buffer,  // Output buffer (if used)
+	int maxlength) // Output buffer (if used)
+{
+
+	switch (action)
+	{
+		case TopMenuAction_DisplayOption:
+		{
+			FormatEx(buffer, maxlength, "%T", "Comm List", param);
+		}
+	}
+}
+
+
+public void AdminMenu_OnlineCommList(TopMenu topmenu,
+	TopMenuAction action,  // Action being performed
+	TopMenuObject object_id,  // The object ID (if used)
+	int param,  // client idx of admin who chose the option (if used)
+	char[] buffer,  // Output buffer (if used)
+	int maxlength) // Output buffer (if used)
+{
+	/* Clear the Ownreason bool, so he is able to chat again;) */
+	g_ownReasons[param] = false;
+
+	switch (action)
+	{
+		// We are only being displayed, We only need to show the option name
+		case TopMenuAction_DisplayOption:
+		{
+			FormatEx(buffer, maxlength, "%T", "Online Comm List", param);
+		}
+
+		case TopMenuAction_SelectOption:
+		{
+			DisplayOnlineCommListMenu(param); // Someone chose to ban someone, show the list of users menu
+		}
+	}
+}
+
+
+public void AdminMenu_OfflineCommList(TopMenu topmenu,
+	TopMenuAction action,  // Action being performed
+	TopMenuObject object_id,  // The object ID (if used)
+	int param,  // client idx of admin who chose the option (if used)
+	char[] buffer,  // Output buffer (if used)
+	int maxlength) // Output buffer (if used)
+{
+	/* Clear the Ownreason bool, so he is able to chat again;) */
+	g_ownReasons[param] = false;
+
+	switch (action)
+	{
+		// We are only being displayed, We only need to show the option name
+		case TopMenuAction_DisplayOption:
+		{
+			FormatEx(buffer, maxlength, "%T", "Offline Comm List", param);
+		}
+
+		case TopMenuAction_SelectOption:
+		{
+			QueryCommList(param, 0); // Someone chose to ban someone, show the list of users menu
+		}
+	}
+}
+
+void DisplayOnlineCommListMenu(int client)
+{
+	Menu hMenu = new Menu(MenuHandler_OnlineCommList);
+	
+	char sInfo[11], Name[64];
+	
+	for (int i = 1; i <= MaxClients;i++)
+	{
+		if(!IsClientInGame(i))
+			continue;
+		
+		else if(!IsClientPenalized(i, Penalty_Gag) && !IsClientPenalized(i, Penalty_Mute))
+			continue;
+		
+		IntToString(GetClientUserId(i), sInfo, sizeof(sInfo));
+		
+		GetClientName(i, Name, sizeof(Name));
+		
+		hMenu.AddItem(sInfo, Name);
+	}
+	
+	if(GetMenuItemCount(hMenu) == 0)
+	{
+		delete hMenu;
+		
+		UC_PrintToChat(client, "%s%t", PREFIX, "No Penalties At All");
+		
+		return;
+	}
+	
+	hMenu.Display(client, MENU_TIME_FOREVER);
+}
+
+
+public int MenuHandler_OnlineCommList(Menu menu, MenuAction action, int param1, int param2)
+{
+	switch (action)
+	{
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+
+		case MenuAction_Cancel:
+		{
+			if (param2 == MenuCancel_ExitBack && hTopMenu != INVALID_HANDLE)
+			{
+				RedisplayAdminMenu(hTopMenu, param1);
+			}
+		}
+
+		case MenuAction_Select:
+		{
+			char info[32], name[32];
+			int userid, target;
+
+			menu.GetItem(param2, info, sizeof(info), _, name, sizeof(name));
+			userid = StringToInt(info);
+
+			if ((target = GetClientOfUserId(userid)) == 0)
+			{
+				UC_PrintToChat(param1, "%s%t", PREFIX, "Player no longer available");
+			}
+			else
+			{
+				g_CommTarget[param1] = target;
+				DisplayTargetCommList(param1);
+			}
+		}
+	}
+}
+
+void DisplayTargetCommList(int client)
+{
+	int target = g_CommTarget[client];
+	
+	char AuthId[35];
+	
+	GetClientAuthId(target, AuthId_Steam2, AuthId, sizeof(AuthId));
+	
+	FakeClientCommand(client, "sm_commlist %s", AuthId);
 }
 
 public void AdminMenu_Ban(TopMenu topmenu,
@@ -2707,29 +2944,17 @@ public void AdminMenu_Ban(TopMenu topmenu,
 	/* Clear the Ownreason bool, so he is able to chat again;) */
 	g_ownReasons[param] = false;
 
-	#if defined DEBUG
-	LogToFile(logFile, "AdminMenu_Ban()");
-	#endif
-
 	switch (action)
 	{
 		// We are only being displayed, We only need to show the option name
 		case TopMenuAction_DisplayOption:
 		{
 			FormatEx(buffer, maxlength, "%T", "Ban player", param);
-
-			#if defined DEBUG
-			LogToFile(logFile, "AdminMenu_Ban() -> Formatted the Ban option text");
-			#endif
 		}
 
 		case TopMenuAction_SelectOption:
 		{
 			DisplayBanTargetMenu(param); // Someone chose to ban someone, show the list of users menu
-
-			#if defined DEBUG
-			LogToFile(logFile, "AdminMenu_Ban() -> DisplayBanTargetMenu()");
-			#endif
 		}
 	}
 }
@@ -2747,7 +2972,7 @@ public int ReasonSelected(Menu menu, MenuAction action, int param1, int param2)
 			if (StrEqual("Own Reason", key)) // admin wants to use his own reason
 			{
 				g_ownReasons[param1] = true;
-				PrintToChat(param1, "[SM] %t", "Custom ban reason explanation", "sm_abortban");
+				UC_PrintToChat(param1, "%s%t", PREFIX, "Custom ban reason explanation", "sm_abortban");
 				return;
 			}
 
@@ -2776,10 +3001,6 @@ public int ReasonSelected(Menu menu, MenuAction action, int param1, int param2)
 
 public int MenuHandler_BanPlayerList(Menu menu, MenuAction action, int param1, int param2)
 {
-	#if defined DEBUG
-	LogToFile(logFile, "MenuHandler_BanPlayerList()");
-	#endif
-
 	switch (action)
 	{
 		case MenuAction_End:
@@ -2805,11 +3026,11 @@ public int MenuHandler_BanPlayerList(Menu menu, MenuAction action, int param1, i
 
 			if ((target = GetClientOfUserId(userid)) == 0)
 			{
-				PrintToChat(param1, "[SM] %t", "Player no longer available");
+				UC_PrintToChat(param1, "%s%t", PREFIX, "Player no longer available");
 			}
 			else if (!CanUserTarget(param1, target))
 			{
-				PrintToChat(param1, "[SM] %t", "Unable to target");
+				UC_PrintToChat(param1, "%s%t", PREFIX, "Unable to target");
 			}
 			else
 			{
@@ -2822,17 +3043,13 @@ public int MenuHandler_BanPlayerList(Menu menu, MenuAction action, int param1, i
 
 public int MenuHandler_BanTimeList(Menu menu, MenuAction action, int param1, int param2)
 {
-	#if defined DEBUG
-	LogToFile(logFile, "MenuHandler_BanTimeList()");
-	#endif
-
 	switch (action)
 	{
 		case MenuAction_Cancel:
 		{
 			if (param2 == MenuCancel_ExitBack && hTopMenu != INVALID_HANDLE)
 			{
-				hTopMenu.Display(param1, TopMenuPosition_LastCategory);
+				DisplayBanTargetMenu(param1);
 			}
 		}
 
@@ -2862,10 +3079,6 @@ public int MenuHandler_BanTimeList(Menu menu, MenuAction action, int param1, int
 
 stock void DisplayBanTargetMenu(int client)
 {
-	#if defined DEBUG
-	LogToFile(logFile, "DisplayBanTargetMenu()");
-	#endif
-
 	Menu menu = new Menu(MenuHandler_BanPlayerList); // Create a new menu, pass it the handler.
 
 	char title[100];
@@ -2885,10 +3098,6 @@ stock void DisplayBanTargetMenu(int client)
 
 stock void DisplayBanTimeMenu(int client)
 {
-	#if defined DEBUG
-	LogToFile(logFile, "DisplayBanTimeMenu()");
-	#endif
-
 	char title[100];
 	FormatEx(title, sizeof(title), "%T:", "Ban player", client);
 	SetMenuTitle(TimeMenuHandle, title);
@@ -3032,6 +3241,22 @@ stock bool IsClientVoiceMuted(int client, int &Expire = 0, bool &permanent = fal
 	return false;
 }
 
+// Don't use Penalty_Ban here :(
+
+// excludeSilence means Penalty_Gag won't trigger true if silenced, but Penalty_Silence will.
+stock bool IsClientPenalized(int client, enPenaltyType PenaltyType, bool excludeSilence = false)
+{	
+	int UnixTime = GetTime();
+	
+	if(ExpirePenalty[client][PenaltyType] > UnixTime || ExpirePenalty[client][PenaltyType] == -1)
+		return true;
+	
+	if(!excludeSilence && (ExpirePenalty[client][Penalty_Silence] > UnixTime || ExpirePenalty[client][Penalty_Silence] == -1))
+		return true;
+	return false;
+}
+
+
 stock bool CanClientBanTarget(int client, int target)
 {
 	if(client == 0)
@@ -3073,7 +3298,7 @@ stock void ReplyToCommandBySource(int client, ReplySource CmdReplySource, const 
 	
 	SetCmdReplySource(CmdReplySource);
 	
-	ReplyToCommand(client, buffer);
+	UC_ReplyToCommand(client, buffer);
 	
 	SetCmdReplySource(PrevReplySource);
 }
@@ -3132,18 +3357,191 @@ stock int PositiveOrZero(int value)
 	return value;
 }
 
+
 #if defined _autoexecconfig_included
 
 stock ConVar UC_CreateConVar(const char[] name, const char[] defaultValue, const char[] description = "", int flags = 0, bool hasMin = false, float min = 0.0, bool hasMax = false, float max = 0.0)
 {
-	return AutoExecConfig_CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
+	ConVar hndl = AutoExecConfig_CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
+	
+	if(flags & FCVAR_PROTECTED)
+		ServerCommand("sm_cvar protect %s", name);
+		
+	return hndl;
 }
 
 #else
 
 stock ConVar UC_CreateConVar(const char[] name, const char[] defaultValue, const char[] description = "", int flags = 0, bool hasMin = false, float min = 0.0, bool hasMax = false, float max = 0.0)
 {
-	return CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
+	ConVar hndl = CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
+	
+	if(flags & FCVAR_PROTECTED)
+		ServerCommand("sm_cvar protect %s", name);
+		
+	return hndl;
 }
  
 #endif
+
+
+// https://forums.alliedmods.net/showpost.php?p=2325048&postcount=8
+// Print a Valve translation phrase to a group of players 
+// Adapted from util.h's UTIL_PrintToClientFilter 
+stock void UC_PrintCenterTextAll(const char[] msg_name, const char[] param1 = "", const char[] param2 = "", const char[] param3 = "", const char[] param4 = "")
+{ 
+	UserMessageType MessageType = GetUserMessageType();
+	for(int i=1;i <= MaxClients;i++)
+	{
+		if(!IsClientInGame(i))
+			continue;
+		
+		SetGlobalTransTarget(i);
+		
+		Handle bf = StartMessageOne("TextMsg", i, USERMSG_RELIABLE); 
+		 
+		if (MessageType == UM_Protobuf) 
+		{ 
+			PbSetInt(bf, "msg_dst", HUD_PRINTCENTER); 
+			PbAddString(bf, "params", msg_name); 
+				
+			PbAddString(bf, "params", param1); 
+			PbAddString(bf, "params", param2); 
+			PbAddString(bf, "params", param3); 
+			PbAddString(bf, "params", param4); 
+		} 
+		else 
+		{ 
+			BfWriteByte(bf, HUD_PRINTCENTER); 
+			BfWriteString(bf, msg_name); 
+			
+			BfWriteString(bf, param1); 
+			BfWriteString(bf, param2); 
+			BfWriteString(bf, param3); 
+			BfWriteString(bf, param4); 
+		}
+		 
+		EndMessage(); 
+	}
+}  
+
+// Registers a command and saves it for later when we wanna iterate all commands.
+stock void UC_RegAdminCmd(const char[] cmd, ConCmd callback, int adminflags, const char[] description = "", const char[] group = "", int flags = 0)
+{
+	RegAdminCmd(cmd, callback, adminflags, description, group, flags);
+	
+	char Info[300];
+	FormatEx(Info, sizeof(Info), "\"%i\" \"%s\"", adminflags, description);
+	
+	SetTrieString(Trie_UCCommands, cmd, Info);
+}
+
+stock void UC_RegConsoleCmd(const char[] cmd, ConCmd callback, const char[] description = "", int flags = 0)
+{
+	RegConsoleCmd(cmd, callback, description, flags);
+
+	char Info[300];
+	FormatEx(Info, sizeof(Info), "\"%i\" \"%s\"", 0, description);
+	
+	SetTrieString(Trie_UCCommands, cmd, Info);
+}
+
+
+stock void UC_ReplyToCommand(int client, const char[] format, any ...)
+{
+	SetGlobalTransTarget(client);
+	char buffer[256];
+
+	VFormat(buffer, sizeof(buffer), format, 3);
+	for(int i=0;i < sizeof(Colors);i++)
+	{
+		ReplaceString(buffer, sizeof(buffer), Colors[i], ColorEquivalents[i]);
+	}
+	
+	ReplyToCommand(client, buffer);
+}
+
+stock void UC_PrintToChat(int client, const char[] format, any ...)
+{
+	SetGlobalTransTarget(client);
+	
+	char buffer[256];
+	
+	VFormat(buffer, sizeof(buffer), format, 3);
+	for(int i=0;i < sizeof(Colors);i++)
+	{
+		ReplaceString(buffer, sizeof(buffer), Colors[i], ColorEquivalents[i]);
+	}
+	
+	PrintToChat(client, buffer);
+}
+
+stock void UC_PrintToChatAll(const char[] format, any ...)
+{	
+	char buffer[256];
+	for(int i=1;i <= MaxClients;i++)
+	{
+		if(!IsClientInGame(i))
+			continue;
+		
+		SetGlobalTransTarget(i);
+		VFormat(buffer, sizeof(buffer), format, 2);
+		
+		UC_PrintToChat(i, buffer);
+	}
+}
+
+stock void UC_PrintToChatAdmins(const char[] format, any ...)
+{	
+	char buffer[256];
+	
+	for(int i=1;i <= MaxClients;i++)
+	{
+		if(!IsClientInGame(i))
+			continue;
+		
+		else if (!CheckCommandAccess(i, "sm_admin", ADMFLAG_GENERIC))
+			continue;
+			
+		SetGlobalTransTarget(i);
+		
+		VFormat(buffer, sizeof(buffer), format, 2);
+		
+		UC_PrintToChat(i, buffer);
+	}
+}
+
+
+stock void UC_PrintToConsole(int client, const char[] format, any ...)
+{
+	SetGlobalTransTarget(client);
+	
+	char buffer[256];
+	
+	VFormat(buffer, sizeof(buffer), format, 3);
+	for(int i=0;i < sizeof(Colors);i++)
+	{
+		ReplaceString(buffer, sizeof(buffer), Colors[i], "");
+	}
+	
+	PrintToConsole(client, buffer);
+}
+stock void UC_ShowActivity2(int client, const char[] Tag, const char[] format, any ...)
+{
+	char buffer[256], TagBuffer[256];
+	VFormat(buffer, sizeof(buffer), format, 4);
+	
+	Format(TagBuffer, sizeof(TagBuffer), Tag);
+	
+	for(int i=0;i < sizeof(Colors);i++)
+	{
+		ReplaceString(buffer, sizeof(buffer), Colors[i], ColorEquivalents[i]);
+	}
+	
+	for(int i=0;i < sizeof(Colors);i++)
+	{
+		ReplaceString(TagBuffer, sizeof(TagBuffer), Colors[i], ColorEquivalents[i]);
+	}
+	
+	ShowActivity2(client, TagBuffer, buffer);
+}
