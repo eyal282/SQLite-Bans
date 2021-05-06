@@ -2,10 +2,10 @@
 {
 	"Version"
 	{
-		"Latest"	"3.3"
+		"Latest"	"3.4"
 	}
 	
-	"Notes"	"Added unban and comm remove logs for the discord module."
+"Notes"	"Added ban menu to !admin and !ban without arguments."
 }
 	
 "Files"
