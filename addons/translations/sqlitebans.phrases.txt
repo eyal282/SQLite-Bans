@@ -207,4 +207,8 @@
 	{
 		"en"	"Offline Comm List"
 	}
+	"You Are Not Comm Blocked"
+	{
+		"en"	"You are not comm blocked."
+	}
 }

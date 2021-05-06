@@ -369,8 +369,6 @@ public any Native_CommUnpunishClient(Handle plugin, int numParams)
 	
 	SQLiteBans_CommUnpunishIdentity(AuthId, PenaltyType, source);
 	
-	WasGaggedLastCheck[client] = false;
-	WasMutedLastCheck[client] = false;
 	return Plugin_Handled;
 }
 
@@ -603,10 +601,21 @@ public void SQLCB_Unpenalty_FindPenalties(Handle db, Handle hndl, const char[] s
 	else
 		GetClientName(client, AdminName, sizeof(AdminName));
 		
+	int target = UC_FindTargetByAuthId(AuthId);
+	
 	char sQuery[1024];
-	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE Penalty = %i AND (AuthId = '%s' OR IPAddress = '%s')", PenaltyType, TargetArg, TargetArg);
+	
+	SQL_FormatQuery(dbLocal, sQuery, sizeof(sQuery), "DELETE FROM SQLiteBans_players WHERE Penalty = %i AND AuthId = '%s'", PenaltyType, TargetArg);
 	SQL_TQuery(dbLocal, SQLCB_Error, sQuery, 50);
 	
+	
+	if(target != 0)
+	{
+		ExpirePenalty[target][PenaltyType] = 0;
+	
+		WasGaggedLastCheck[target] = false;
+		WasMutedLastCheck[target] = false;
+	}
 	Call_StartForward(fw_OnCommUnpunishIdentity_Post);
 	
 	Call_PushCell(PenaltyType);
@@ -708,8 +717,8 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_abortban", Command_AbortBan, "sm_abortban");
 	//RegAdminCmd("sm_sqlitebans_backup", Command_Backup, ADMFLAG_ROOT, "Backs up the bans database to an external file");
 	
-	//RegConsoleCmd("sm_commstatus", Command_CommStatus, "Gives you information about communication penalties active on you");
-	//RegConsoleCmd("sm_comms", Command_CommStatus, "Gives you information about communication penalties active on you");
+	RegConsoleCmd("sm_commstatus", Command_CommStatus, "Gives you information about communication penalties active on you");
+	RegConsoleCmd("sm_comms", Command_CommStatus, "Gives you information about communication penalties active on you");
 	
 	#if defined _autoexecconfig_included
 	
@@ -2198,39 +2207,26 @@ public Action Command_OfflineUnpenalty(int client, int args)
 	
 	return Plugin_Handled;
 }
-/*
+
 public Action Command_CommStatus(int client, int args)
 {
-	char ExpirationDate[64];
-	int Expire, UnixTime = GetTime();
-	bool Gagged = IsClientChatGagged(client, Expire);
-	FormatTime(ExpirationDate, sizeof(ExpirationDate), "%Y/%m/%d - %H:%M:%S", Expire);
-	
-	int MinutesLeft = (Expire - UnixTime) / 60;
-	if(Expire <= 0) // If you aren't gagged, it won't expire lol.
+	if(client == 0)
+		return Plugin_Handled;
+		
+	if(!IsClientPenalized(client, Penalty_Gag) && !IsClientPenalized(client, Penalty_Mute))
 	{
-		FormatEx(ExpirationDate, sizeof(ExpirationDate), "Never");
-		MinutesLeft = 0;
-	}	
+		UC_PrintToChat(client, "%s%t", PREFIX, "You Are Not Comm Blocked");
+		
+		return Plugin_Handled;
+	}
 	
-	UC_PrintToChat(client, "%sGagged: %s, Expiration: %s ( %i minutes )", PREFIX, Gagged ? "Yes" : "No", ExpirationDate, MinutesLeft);
+	GetClientAuthId(client, AuthId_Engine, CommListArg[client], sizeof(CommListArg[]));
 	
-	bool Muted = IsClientVoiceMuted(client, Expire);
-	
-	FormatTime(ExpirationDate, sizeof(ExpirationDate), "%Y/%m/%d - %H:%M:%S", Expire);
-	
-	MinutesLeft = (Expire - UnixTime) / 60;
-	if(Expire <= 0) // If you aren't muted, it won't expire lol.
-	{
-		FormatEx(ExpirationDate, sizeof(ExpirationDate), "Never");
-		MinutesLeft = 0;
-	}	
-	
-	UC_PrintToChat(client, "%sMuted: %s, Expiration: %s ( %i minutes )", PREFIX, Muted ? "Yes" : "No", ExpirationDate, MinutesLeft);
+	QueryCommList(client, 0);
 	
 	return Plugin_Handled;
 }
-*/
+
 public Action Command_BanList(int client, int args)
 {
 	if(client == 0)
@@ -2624,7 +2620,7 @@ void CommListMenu_ShowTargetInfo(int client, char AuthId[35], char IPAddress[32]
 		
 		PenaltyAlias[0] = CharToUpper(PenaltyAlias[0]);
 		
-		SetMenuTitle(hMenu, "%s Info of %s\n AuthId: %s | IP: %s\n Admin Info [%s]:\n Admin AuthId: %s\n Expiration Date: %s", PenaltyAlias, Name, AuthId, IPAddress, AdminName, AdminAuthId, ExpirationDate);
+		SetMenuTitle(hMenu, "%s Info of %s\n AuthId: %s\n Admin Info [%s]:\n Admin AuthId: %s\n Expiration Date: %s", PenaltyAlias, Name, AuthId, AdminName, AdminAuthId, ExpirationDate);
 		
 		Handle Array_Target = CreateArray(sizeof(enTargets));
 		
@@ -2639,7 +2635,12 @@ void CommListMenu_ShowTargetInfo(int client, char AuthId[35], char IPAddress[32]
 		char TempFormat[64];
 		
 		IntToString(view_as<int>(Array_Target), TempFormat, sizeof(TempFormat));
-		AddMenuItem(hMenu, TempFormat, "Unpunish Player");
+		
+		if(CheckCommandAccess(client, "sm_unsilence", ADMFLAG_CHAT))
+			AddMenuItem(hMenu, TempFormat, "Unpunish Player");
+			
+		else
+			AddMenuItem(hMenu, TempFormat, "Exit");
 		
 		SetMenuExitBackButton(hMenu, true);
 		
@@ -2681,30 +2682,30 @@ public int CommListTargetInfo_MenuHandler(Handle hMenu, MenuAction action, int c
 	}
 	else if(action == MenuAction_Select)
 	{
-		switch(item)
+		char ItemName[64], dummy_value[1];
+		GetMenuItem(hMenu, item, dummy_value, 0, _, ItemName, sizeof(ItemName));
+		
+		if(StrEqual(ItemName, "Unpunish Player"))
 		{
-			case 0:
-			{
-				Handle Array_Target;
+			Handle Array_Target;
+			
+			char Info[64];
+			
+			GetMenuItem(hMenu, 0, Info, sizeof(Info));
+			
+			Array_Target = view_as<Handle>(StringToInt(Info));
+			
+			enTargets target;
+			
+			GetArrayArray(Array_Target, 0, target, sizeof(enTargets));
+			
+			char CommandName[32];
+			PenaltyAliasByType(target.PenaltyType, CommandName, sizeof(CommandName), false);
+			
+			Format(CommandName, sizeof(CommandName), "sm_oun%s", CommandName);
+			
+			FakeClientCommand(client, "%s %s", CommandName, target.AuthId);
 				
-				char Info[64];
-				
-				GetMenuItem(hMenu, 0, Info, sizeof(Info));
-				
-				Array_Target = view_as<Handle>(StringToInt(Info));
-				
-				enTargets target;
-				
-				GetArrayArray(Array_Target, 0, target, sizeof(enTargets));
-				
-				char CommandName[32];
-				PenaltyAliasByType(target.PenaltyType, CommandName, sizeof(CommandName), false);
-				
-				Format(CommandName, sizeof(CommandName), "sm_oun%s", CommandName);
-				
-				FakeClientCommand(client, "%s %s", CommandName, target.AuthId);
-				
-			}
 		}
 	}
 }
@@ -3544,4 +3545,23 @@ stock void UC_ShowActivity2(int client, const char[] Tag, const char[] format, a
 	}
 	
 	ShowActivity2(client, TagBuffer, buffer);
+}
+
+
+stock int UC_FindTargetByAuthId(const char[] AuthId)
+{
+	char TempAuthId[35];
+	for(int i=1;i <= MaxClients;i++) // Cookies are not updated for players that are already connected.
+	{
+		if(!IsClientInGame(i))
+			continue;
+			
+		if(!GetClientAuthId(i, AuthId_Engine, TempAuthId, sizeof(TempAuthId)))
+			continue;
+			
+		if(StrEqual(AuthId, TempAuthId, true))
+			return i;
+	}
+	
+	return 0;
 }
