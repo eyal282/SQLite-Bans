@@ -115,6 +115,9 @@ Menu ReasonMenuHandle;
 Menu TimeMenuHandle;
 
 int g_BanTarget[MAXPLAYERS+1], g_BanTime[MAXPLAYERS+1];
+int g_CommTarget[MAXPLAYERS + 1];
+
+char CommListArg[MAXPLAYERS + 1][64];
 
 DataPack PlayerDataPack[MAXPLAYERS+1];
 
@@ -621,7 +624,6 @@ public void OnPluginStart()
 	LoadTranslations("common.phrases");
 	LoadTranslations("basebans.phrases");
 	LoadTranslations("core.phrases");
-	
 	
 	BuildPath(Path_SM, g_BanReasonsPath, sizeof(g_BanReasonsPath), "configs/banreasons.txt");
 	
@@ -1258,6 +1260,15 @@ public void OnClientDisconnect(int client)
 		ExpirePenalty[client][i] = 0;
 		
 	g_ownReasons[client] = false;
+	
+	for (int i = 1; i <= MaxClients;i++)
+	{
+		if(g_BanTarget[i] == client)
+			g_BanTarget[i] = 0;
+			
+		if(g_CommTarget[i] == client)
+			g_CommTarget[i] = 0;
+	}
 }
 
 public void OnClientConnected(int client)
@@ -2448,6 +2459,10 @@ public Action Command_CommList(int client, int args)
 	if(client == 0)
 		return Plugin_Handled;
 	
+	GetCmdArgString(CommListArg[client], sizeof(CommListArg[]));
+	
+	StripQuotes(CommListArg[client]);
+	
 	QueryCommList(client, 0);
 	
 	return Plugin_Handled;
@@ -2779,7 +2794,7 @@ void DisplayOnlineCommListMenu(int client)
 		
 		else if(!IsClientPenalized(i, Penalty_Gag) && !IsClientPenalized(i, Penalty_Mute))
 			continue;
-			
+		
 		IntToString(GetClientUserId(i), sInfo, sizeof(sInfo));
 		
 		GetClientName(i, Name, sizeof(Name));
@@ -2795,6 +2810,8 @@ void DisplayOnlineCommListMenu(int client)
 		
 		return;
 	}
+	
+	hMenu.Display(client, MENU_TIME_FOREVER);
 }
 
 
@@ -2827,15 +2844,94 @@ public int MenuHandler_OnlineCommList(Menu menu, MenuAction action, int param1, 
 			{
 				UC_PrintToChat(param1, "%s%t", PREFIX, "Player no longer available");
 			}
-			else if (!CanUserTarget(param1, target))
-			{
-				UC_PrintToChat(param1, "%s%t", PREFIX, "Unable to target");
-			}
 			else
 			{
-				g_BanTarget[param1] = target;
-				DisplayBanTimeMenu(param1);
+				g_CommTarget[param1] = target;
+				DisplayTargetCommList(param1);
 			}
+		}
+	}
+}
+
+void DisplayTargetCommList(int client)
+{
+	Menu hMenu = new Menu(MenuHandler_TargetCommList);
+	
+	char sInfo[11], PenaltyAlias[32];
+	
+	int target = g_CommTarget[client];
+	
+	enPenaltyType i;
+	for (i = Penalty_Ban; i < enPenaltyType_LENGTH;i++)
+	{		
+		if(!IsClientPenalized(target, i, true))
+			continue;
+		
+		IntToString(i, sInfo, sizeof(sInfo));
+		
+		PenaltyAliasByType(i, PenaltyAlias, sizeof(PenaltyAlias), false);
+		
+		PenaltyAlias[0] = CharToUpper(PenaltyAlias[0]);
+		
+		hMenu.AddItem(sInfo, PenaltyAlias);
+	}
+	
+	if(GetMenuItemCount(hMenu) == 0)
+	{
+		delete hMenu;
+		
+		
+		// Note: Translate later
+		PrintToChat(client, "%s%t", PREFIX, "Target Not Penalized", target, "penalized");
+		
+		return;
+	}
+	
+	hMenu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_TargetCommList(Menu menu, MenuAction action, int param1, int param2)
+{
+	switch (action)
+	{
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+
+		case MenuAction_Cancel:
+		{
+			if (param2 == MenuCancel_ExitBack && hTopMenu != INVALID_HANDLE)
+			{
+				DisplayOnlineCommListMenu(param1);
+			}
+		}
+
+		case MenuAction_Select:
+		{
+			char info[32], name[32];
+			int target;
+
+			menu.GetItem(param2, info, sizeof(info), _, name, sizeof(name));
+			
+			enPenaltyType PenaltyType;
+			
+			PenaltyType = view_as<enPenaltyType>(StringToInt(info));
+			
+			target = g_CommTarget[param1];
+			
+			if(target == 0)
+			{
+				UC_PrintToChat(param1, "%s%t", PREFIX, "Player no longer available");
+				
+				return;
+			}
+			
+			char AuthId[35];
+			
+			GetClientAuthId(target, AuthId_Steam2, AuthId, sizeof(AuthId));
+			
+			FakeClientCommand(param1, "sm_commlist %s", AuthId);
 		}
 	}
 }
@@ -3149,14 +3245,15 @@ stock bool IsClientVoiceMuted(int client, int &Expire = 0, bool &permanent = fal
 
 // Don't use Penalty_Ban here :(
 
-stock bool IsClientPenalized(int client, enPenaltyType PenaltyType)
+// excludeSilence means Penalty_Gag won't trigger true if silenced, but Penalty_Silence will.
+stock bool IsClientPenalized(int client, enPenaltyType PenaltyType, bool excludeSilence = false)
 {	
 	int UnixTime = GetTime();
 	
 	if(ExpirePenalty[client][PenaltyType] > UnixTime || ExpirePenalty[client][PenaltyType] == -1)
 		return true;
 	
-	if(ExpirePenalty[client][Penalty_Silence] > UnixTime || ExpirePenalty[client][Penalty_Silence] == -1)
+	if(!excludeSilence && (ExpirePenalty[client][Penalty_Silence] > UnixTime || ExpirePenalty[client][Penalty_Silence] == -1))
 		return true;
 	return false;
 }
