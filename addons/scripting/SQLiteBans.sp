@@ -2636,7 +2636,7 @@ void CommListMenu_ShowTargetInfo(int client, char AuthId[35], char IPAddress[32]
 		
 		IntToString(view_as<int>(Array_Target), TempFormat, sizeof(TempFormat));
 		
-		if(CheckCommandAccess(client, "sm_unsilence", ADMFLAG_CHAT))
+		if(CheckCommandAccess(client, "sm_ounsilence", ADMFLAG_CHAT))
 			AddMenuItem(hMenu, TempFormat, "Unpunish Player");
 			
 		else
@@ -2687,25 +2687,27 @@ public int CommListTargetInfo_MenuHandler(Handle hMenu, MenuAction action, int c
 		
 		if(StrEqual(ItemName, "Unpunish Player"))
 		{
-			Handle Array_Target;
-			
-			char Info[64];
-			
-			GetMenuItem(hMenu, 0, Info, sizeof(Info));
-			
-			Array_Target = view_as<Handle>(StringToInt(Info));
-			
-			enTargets target;
-			
-			GetArrayArray(Array_Target, 0, target, sizeof(enTargets));
-			
-			char CommandName[32];
-			PenaltyAliasByType(target.PenaltyType, CommandName, sizeof(CommandName), false);
-			
-			Format(CommandName, sizeof(CommandName), "sm_oun%s", CommandName);
-			
-			FakeClientCommand(client, "%s %s", CommandName, target.AuthId);
+			if(CheckCommandAccess(client, "sm_ounsilence", ADMFLAG_CHAT))
+			{
+				Handle Array_Target;
 				
+				char Info[64];
+				
+				GetMenuItem(hMenu, 0, Info, sizeof(Info));
+				
+				Array_Target = view_as<Handle>(StringToInt(Info));
+				
+				enTargets target;
+				
+				GetArrayArray(Array_Target, 0, target, sizeof(enTargets));
+				
+				char CommandName[32];
+				PenaltyAliasByType(target.PenaltyType, CommandName, sizeof(CommandName), false);
+				
+				Format(CommandName, sizeof(CommandName), "sm_oun%s", CommandName);
+				
+				FakeClientCommand(client, "%s %s", CommandName, target.AuthId);
+			}
 		}
 	}
 }
@@ -2775,10 +2777,10 @@ public void OnAdminMenuReady(Handle hTemp)
 			ADMFLAG_BAN); // What flag do we need to see the menu option
 	}
 
-	TopMenuObject CommList = hTopMenu.AddCategory("SQLiteBans - Comm List", AdminMenu_CommList, "sm_unsilence", ADMFLAG_CHAT);
+	TopMenuObject CommList = hTopMenu.AddCategory("SQLiteBans - Comm List", AdminMenu_CommList, "sm_ounsilence", ADMFLAG_CHAT);
 	
-	hTopMenu.AddItem("SQLiteBans - Online Comm List", AdminMenu_OnlineCommList, CommList, "sm_unsilence", ADMFLAG_CHAT);
-	hTopMenu.AddItem("SQLiteBans - Offline Comm List", AdminMenu_OfflineCommList, CommList, "sm_unsilence", ADMFLAG_CHAT);
+	hTopMenu.AddItem("SQLiteBans - Online Comm List", AdminMenu_OnlineCommList, CommList, "sm_ounsilence", ADMFLAG_CHAT);
+	hTopMenu.AddItem("SQLiteBans - Offline Comm List", AdminMenu_OfflineCommList, CommList, "sm_ounsilence", ADMFLAG_CHAT);
 	
 }
 
