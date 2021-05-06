@@ -22,7 +22,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "3.5"
+#define PLUGIN_VERSION "3.6"
 
 
 public Plugin myinfo = 
