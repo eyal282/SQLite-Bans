@@ -2876,7 +2876,7 @@ void DisplayOnlineCommListMenu(int client)
 	{
 		delete hMenu;
 		
-		PrintToChat(client, "%s%t", PREFIX, "No Penalties At All");
+		UC_PrintToChat(client, "%s%t", PREFIX, "No Penalties At All");
 		
 		return;
 	}
@@ -2925,85 +2925,13 @@ public int MenuHandler_OnlineCommList(Menu menu, MenuAction action, int param1, 
 
 void DisplayTargetCommList(int client)
 {
-	Menu hMenu = new Menu(MenuHandler_TargetCommList);
-	
-	char sInfo[11], PenaltyAlias[32];
-	
 	int target = g_CommTarget[client];
 	
-	enPenaltyType i;
-	for (i = Penalty_Ban; i < enPenaltyType_LENGTH;i++)
-	{		
-		if(!IsClientPenalized(target, i, true))
-			continue;
-		
-		IntToString(i, sInfo, sizeof(sInfo));
-		
-		PenaltyAliasByType(i, PenaltyAlias, sizeof(PenaltyAlias), false);
-		
-		PenaltyAlias[0] = CharToUpper(PenaltyAlias[0]);
-		
-		hMenu.AddItem(sInfo, PenaltyAlias);
-	}
+	char AuthId[35];
 	
-	if(GetMenuItemCount(hMenu) == 0)
-	{
-		delete hMenu;
-		
-		
-		// Note: Translate later
-		PrintToChat(client, "%s%t", PREFIX, "Target Not Penalized", target, "penalized");
-		
-		return;
-	}
+	GetClientAuthId(target, AuthId_Steam2, AuthId, sizeof(AuthId));
 	
-	hMenu.Display(client, MENU_TIME_FOREVER);
-}
-
-public int MenuHandler_TargetCommList(Menu menu, MenuAction action, int param1, int param2)
-{
-	switch (action)
-	{
-		case MenuAction_End:
-		{
-			delete menu;
-		}
-
-		case MenuAction_Cancel:
-		{
-			if (param2 == MenuCancel_ExitBack && hTopMenu != INVALID_HANDLE)
-			{
-				DisplayOnlineCommListMenu(param1);
-			}
-		}
-
-		case MenuAction_Select:
-		{
-			char info[32], name[32];
-			int target;
-
-			menu.GetItem(param2, info, sizeof(info), _, name, sizeof(name));
-			
-			enPenaltyType PenaltyType;
-			
-			PenaltyType = view_as<enPenaltyType>(StringToInt(info));
-			
-			target = g_CommTarget[param1];
-			
-			if(target == 0)
-			{
-				UC_PrintToChat(param1, "%s%t", PREFIX, "Player no longer available");
-				
-				return;
-			}
-			
-			char AuthId[35];
-			
-			GetClientAuthId(target, AuthId_Steam2, AuthId, sizeof(AuthId));
-			
-			FakeClientCommand(param1, "sm_commlist %s", AuthId);
-		}
-	}
+	FakeClientCommand(client, "sm_commlist %s", AuthId);
 }
 
 public void AdminMenu_Ban(TopMenu topmenu,
