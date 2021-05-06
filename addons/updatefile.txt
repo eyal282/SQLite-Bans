@@ -2,10 +2,11 @@
 {
 	"Version"
 	{
-		"Latest"	"3.4"
+		"Latest"	"3.5"
 	}
 	
-"Notes"	"Added ban menu to !admin and !ban without arguments."
+	"Notes"	"Added online & offline comm list to !admin"
+	"Notes"	"Added translations."
 }
 	
 "Files"
@@ -15,4 +16,5 @@
 
 	"Source"	"Path_SM/scripting/SQLiteBans.sp"
 	"Source"	"Path_SM/scripting/SQLiteBans_Discord.sp"
+	"Source"	"Path_SM/translations/sqlitebans.phrases.txt"
 }
