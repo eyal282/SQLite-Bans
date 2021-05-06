@@ -2755,7 +2755,7 @@ public void AdminMenu_CommList(TopMenu topmenu,
 		// A category of one item, directly show the comm list!
 		case TopMenuAction_DisplayOption:
 		{
-			FormatEx(buffer, maxlength, "Comm List");
+			FormatEx(buffer, maxlength, "%T", "Comm List", param);
 		}
 	
 		case TopMenuAction_SelectOption:
@@ -2768,7 +2768,76 @@ public void AdminMenu_CommList(TopMenu topmenu,
 
 void DisplayOnlineCommListMenu(int client)
 {
+	Menu hMenu = new Menu(MenuHandler_OnlineCommList);
+	
+	char sInfo[11], Name[64];
+	
+	for (int i = 1; i <= MaxClients;i++)
+	{
+		if(!IsClientInGame(i))
+			continue;
+		
+		else if(!IsClientPenalized(i, Penalty_Gag) && !IsClientPenalized(i, Penalty_Mute))
+			continue;
+			
+		IntToString(GetClientUserId(i), sInfo, sizeof(sInfo));
+		
+		GetClientName(i, Name, sizeof(Name));
+		
+		hMenu.AddItem(sInfo, Name);
+	}
+	
+	if(GetMenuItemCount(hMenu) == 0)
+	{
+		delete hMenu;
+		
+		PrintToChat(client, "%s%t", PREFIX, "No Penalties At All");
+		
+		return;
+	}
+}
 
+
+public int MenuHandler_OnlineCommList(Menu menu, MenuAction action, int param1, int param2)
+{
+	switch (action)
+	{
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+
+		case MenuAction_Cancel:
+		{
+			if (param2 == MenuCancel_ExitBack && hTopMenu != INVALID_HANDLE)
+			{
+				RedisplayAdminMenu(hTopMenu, param1);
+			}
+		}
+
+		case MenuAction_Select:
+		{
+			char info[32], name[32];
+			int userid, target;
+
+			menu.GetItem(param2, info, sizeof(info), _, name, sizeof(name));
+			userid = StringToInt(info);
+
+			if ((target = GetClientOfUserId(userid)) == 0)
+			{
+				UC_PrintToChat(param1, "%s%t", PREFIX, "Player no longer available");
+			}
+			else if (!CanUserTarget(param1, target))
+			{
+				UC_PrintToChat(param1, "%s%t", PREFIX, "Unable to target");
+			}
+			else
+			{
+				g_BanTarget[param1] = target;
+				DisplayBanTimeMenu(param1);
+			}
+		}
+	}
 }
 
 public void AdminMenu_Ban(TopMenu topmenu,
@@ -3078,6 +3147,8 @@ stock bool IsClientVoiceMuted(int client, int &Expire = 0, bool &permanent = fal
 	return false;
 }
 
+// Don't use Penalty_Ban here :(
+
 stock bool IsClientPenalized(int client, enPenaltyType PenaltyType)
 {	
 	int UnixTime = GetTime();
@@ -3085,6 +3156,8 @@ stock bool IsClientPenalized(int client, enPenaltyType PenaltyType)
 	if(ExpirePenalty[client][PenaltyType] > UnixTime || ExpirePenalty[client][PenaltyType] == -1)
 		return true;
 	
+	if(ExpirePenalty[client][Penalty_Silence] > UnixTime || ExpirePenalty[client][Penalty_Silence] == -1)
+		return true;
 	return false;
 }
 
