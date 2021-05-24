@@ -2,10 +2,10 @@
 {
 	"Version"
 	{
-		"Latest"	"3.6"
+		"Latest"	"3.7"
 	}
 	
-	"Notes"	"Re-added sm_comms to be like SBPP"
+	"Notes"	"Added sqlite_bans_version cvar."
 }
 	
 "Files"
