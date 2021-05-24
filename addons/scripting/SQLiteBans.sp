@@ -22,7 +22,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "3.6"
+#define PLUGIN_VERSION "3.7"
 
 
 public Plugin myinfo = 
@@ -719,20 +719,6 @@ public void OnPluginStart()
 	
 	RegConsoleCmd("sm_commstatus", Command_CommStatus, "Gives you information about communication penalties active on you");
 	RegConsoleCmd("sm_comms", Command_CommStatus, "Gives you information about communication penalties active on you");
-	
-	#if defined _autoexecconfig_included
-	
-	AutoExecConfig_SetFile("SQLiteBans");
-	
-	#endif
-
-	#if defined _autoexecconfig_included
-	
-	AutoExecConfig_ExecuteFile();
-
-	AutoExecConfig_CleanFile();
-	
-	#endif
 		
 	char LogPath[256];
 	
@@ -779,6 +765,14 @@ public void OnConfigsExecuted()
 
 public void OnAllPluginsLoaded()
 {
+	
+	#if defined _autoexecconfig_included
+	
+	AutoExecConfig_SetFile("SQLiteBans");
+	
+	#endif
+	
+	SetConVarString(CreateConVar("sqlite_bans_version", PLUGIN_VERSION, _, FCVAR_NOTIFY), PLUGIN_VERSION);
 	hcv_Tag = UC_CreateConVar("sqlite_bans_tag", "[{RED}SQLiteBans{NORMAL}] {NORMAL}", _, FCVAR_PROTECTED);
 	hcv_Website = UC_CreateConVar("sqlite_bans_url", "http://yourwebsite.com", "Url to direct banned players to go to if they wish to appeal their ban", FCVAR_PROTECTED);
 	hcv_LogMethod = UC_CreateConVar("sqlite_bans_log_method", "1", "0 - Log in the painful to look at \"L20190412.log\" files. 1 - Log in a seperate file, in sourcemod/logs/SQLiteBans.log", FCVAR_PROTECTED);
@@ -804,6 +798,16 @@ public void OnAllPluginsLoaded()
 	GetConVarString(hcv_Alltalk, Value, sizeof(Value));
 	
 	hcvChange_Alltalk(hcv_Alltalk, Value, Value);
+	
+
+	#if defined _autoexecconfig_included
+	
+	AutoExecConfig_ExecuteFile();
+
+	AutoExecConfig_CleanFile();
+	
+	#endif
+	
 	TopMenu topmenu;
 
 	if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE))
