@@ -22,7 +22,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "3.7"
+#define PLUGIN_VERSION "3.8"
 
 
 public Plugin myinfo = 
@@ -979,7 +979,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 			UC_PrintToChat(client, "%s%t", PREFIX, "Gag Indicator - Permanent");
 		
 		else
-			UC_PrintToChat(client, "%s%t", PREFIX, "Gag Indicator - Permanent", RoundToFloor((float((Expire - GetTime())) / 60.0) - 0.1) + 1);
+			UC_PrintToChat(client, "%s%t", PREFIX, "Gag Indicator - Temporary", RoundToFloor((float((Expire - GetTime())) / 60.0) - 0.1) + 1);
 			
 		return Plugin_Stop;
 	}
