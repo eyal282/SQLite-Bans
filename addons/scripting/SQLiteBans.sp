@@ -22,7 +22,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "3.8"
+#define PLUGIN_VERSION "3.9"
 
 
 public Plugin myinfo = 
@@ -771,7 +771,7 @@ public void OnAllPluginsLoaded()
 	AutoExecConfig_SetFile("SQLiteBans");
 	
 	#endif
-	
+
 	SetConVarString(CreateConVar("sqlite_bans_version", PLUGIN_VERSION, _, FCVAR_NOTIFY), PLUGIN_VERSION);
 	hcv_Tag = UC_CreateConVar("sqlite_bans_tag", "[{RED}SQLiteBans{NORMAL}] {NORMAL}", _, FCVAR_PROTECTED);
 	hcv_Website = UC_CreateConVar("sqlite_bans_url", "http://yourwebsite.com", "Url to direct banned players to go to if they wish to appeal their ban", FCVAR_PROTECTED);
@@ -912,7 +912,7 @@ public Action Timer_CheckCommStatus(Handle hTimer)
 	{
 		if(!IsClientInGame(i))
 			continue;
-		
+			
 		bool WasGagged = false, WasMuted = false;
 		
 		if(!IsClientChatGagged(i) && WasGaggedLastCheck[i])
@@ -952,6 +952,9 @@ public Action Timer_CheckCommStatus(Handle hTimer)
 		
 		WasGaggedLastCheck[i] = IsClientChatGagged(i);
 		WasMutedLastCheck[i] = IsClientVoiceMuted(i);
+		
+		if(IsClientVoiceMuted(i))
+			SetClientListeningFlags(i, VOICE_MUTED);
 		
 	}
 }

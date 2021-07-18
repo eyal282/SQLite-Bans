@@ -2,7 +2,7 @@
 {
 	"Version"
 	{
-		"Latest"	"3.7"
+		"Latest"	"3.9"
 	}
 	
 	"Notes"	"Added sqlite_bans_version cvar."
