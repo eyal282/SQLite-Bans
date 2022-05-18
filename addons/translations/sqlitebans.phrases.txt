@@ -42,7 +42,7 @@
 	"Command Usage Add Ban"
 	{
 		"#format"	"{1:s}"
-		"en"		"Usage: {1} <steamid|ip> <minutes|0> [reason]"	
+		"en"		"Usage: {1} <minutes|0> <steamid|ip> [reason]"	
 	}
 	"Command Usage Unban"
 	{
