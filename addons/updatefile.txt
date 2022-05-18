@@ -2,10 +2,10 @@
 {
 	"Version"
 	{
-		"Latest"	"3.9"
+		"Latest"	"4.0"
 	}
 	
-	"Notes"	"Added sqlite_bans_version cvar."
+	"Notes"	"Fixed negative penalty bugs."
 }
 	
 "Files"
