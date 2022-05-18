@@ -2,10 +2,10 @@
 {
 	"Version"
 	{
-		"Latest"	"4.1"
+		"Latest"	"4.2"
 	}
 	
-	"Notes"	"sm_addban is identical to sourcebans in argument order."
+	"Notes"	"Bug fix."
 }
 	
 "Files"
