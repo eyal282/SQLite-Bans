@@ -22,7 +22,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "4.0"
+#define PLUGIN_VERSION "4.1"
 
 public Plugin myinfo =
 {
@@ -31,6 +31,7 @@ public Plugin myinfo =
 	description = "Banning system that works on SQLite",
 	version     = PLUGIN_VERSION,
 	url         = "https://forums.alliedmods.net/showthread.php?t=315623"
+
 
 }
 
@@ -659,7 +660,7 @@ public void OnPluginStart()
 	RegAdminCmd("sm_banip", Command_BanIP, ADMFLAG_BAN, "sm_banip <#userid|name> <minutes|0> [reason]");
 	RegAdminCmd("sm_fban", Command_FullBan, ADMFLAG_BAN, "sm_fban <#userid|name> <minutes|0> [reason]");
 	RegAdminCmd("sm_fullban", Command_FullBan, ADMFLAG_BAN, "sm_fban <#userid|name> <minutes|0> [reason]");
-	RegAdminCmd("sm_addban", Command_AddBan, ADMFLAG_BAN, "sm_addban <steamid|ip> <minutes|0> [reason]");
+	RegAdminCmd("sm_addban", Command_AddBan, ADMFLAG_BAN, "sm_addban <minutes|0> <steamid|ip> [reason]");
 	RegAdminCmd("sm_unban", Command_Unban, ADMFLAG_UNBAN, "sm_unban <steamid|ip>");
 
 	fw_OnBanIdentity             = CreateGlobalForward("SQLiteBans_OnBanIdentity", ET_Ignore, Param_Cell, Param_String, Param_String, Param_String, Param_String);
@@ -1746,11 +1747,12 @@ public Action Command_AddBan(int client, int args)
 	}
 
 	char ArgStr[256];
+	// BanDuration and TargetArg are swapped because SourceBans++!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	char TargetArg[64], BanDuration[32];
 	char BanReason[170];
 	GetCmdArgString(ArgStr, sizeof(ArgStr));
 
-	int len = BreakString(ArgStr, TargetArg, sizeof(TargetArg));
+	int len = BreakString(ArgStr, BanDuration, sizeof(BanDuration));
 
 	if (len == -1)
 	{
@@ -1762,7 +1764,7 @@ public Action Command_AddBan(int client, int args)
 		return Plugin_Handled;
 	}
 
-	int len2 = BreakString(ArgStr[len], BanDuration, sizeof(BanDuration));
+	int len2 = BreakString(ArgStr[len], TargetArg, sizeof(TargetArg));
 
 	if (len2 != -1)
 		FormatEx(BanReason, sizeof(BanReason), ArgStr[len + len2]);
