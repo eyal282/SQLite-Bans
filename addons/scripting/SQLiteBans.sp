@@ -737,7 +737,7 @@ public void OnPluginStart()
 }
 
 #if defined _updater_included
-public int Updater_OnPluginUpdated()
+public void Updater_OnPluginUpdated()
 {
 	ServerCommand("sm_reload_translations");
 	
