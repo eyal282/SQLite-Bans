@@ -2,10 +2,10 @@
 {
 	"Version"
 	{
-		"Latest"	"4.2"
+		"Latest"	"4.3"
 	}
 	
-	"Notes"	"Bug fix."
+	"Notes"	"Throwback bug fix"
 }
 	
 "Files"
