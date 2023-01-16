@@ -2,10 +2,10 @@
 {
 	"Version"
 	{
-		"Latest"	"4.3"
+		"Latest"	"4.4"
 	}
 	
-	"Notes"	"Throwback bug fix"
+	"Notes"	"Mandatory optional dependency, mute indicator. Very useful and can be toggled off."
 }
 	
 "Files"
