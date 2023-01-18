@@ -19,7 +19,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "4.4"
+#define PLUGIN_VERSION "4.5"
 
 public Plugin myinfo =
 {
@@ -932,6 +932,9 @@ public Action OnMuteIndicate(int client, bool realtime, ArrayList messages)
 	}
 
 	msg.timeleft = Expire - GetTime();
+
+	if(permanent)
+		msg.timeleft = 0;
 
 	messages.PushArray(msg);
 
@@ -2920,6 +2923,27 @@ public void OnAdminMenuReady(Handle hTemp)
 			player_commands,    // We are a submenu of Player Commands
 			"sm_ban",           // The command to be finally called (Override checks)
 			ADMFLAG_BAN);       // What flag do we need to see the menu option
+
+		hTopMenu.AddItem(
+			"sm_gag",           // Name
+			AdminMenu_Gag,      // Handler function
+			player_commands,    // We are a submenu of Player Commands
+			"sm_gag",           // The command to be finally called (Override checks)
+			ADMFLAG_CHAT);       // What flag do we need to see the menu option
+
+		hTopMenu.AddItem(
+			"sm_mute",           // Name
+			AdminMenu_Mute,      // Handler function
+			player_commands,    // We are a submenu of Player Commands
+			"sm_mute",           // The command to be finally called (Override checks)
+			ADMFLAG_CHAT);       // What flag do we need to see the menu option
+
+		hTopMenu.AddItem(
+			"sm_silence",           // Name
+			AdminMenu_Silence,      // Handler function
+			player_commands,    // We are a submenu of Player Commands
+			"sm_silence",           // The command to be finally called (Override checks)
+			ADMFLAG_CHAT);       // What flag do we need to see the menu option
 	}
 
 	TopMenuObject CommList = hTopMenu.AddCategory("SQLiteBans - Comm List", AdminMenu_CommList, "sm_ounsilence", ADMFLAG_CHAT);
@@ -3104,6 +3128,83 @@ public void AdminMenu_Ban(TopMenu       topmenu,
 	}
 }
 
+
+public void AdminMenu_Gag(TopMenu       topmenu,
+                   TopMenuAction action,       // Action being performed
+                   TopMenuObject object_id,    // The object ID (if used)
+                   int           param,        // client idx of admin who chose the option (if used)
+                   char[] buffer,              // Output buffer (if used)
+                   int maxlength)              // Output buffer (if used)
+{
+	/* Clear the Ownreason bool, so he is able to chat again;) */
+	g_ownReasons[param] = false;
+
+	switch (action)
+	{
+		// We are only being displayed, We only need to show the option name
+		case TopMenuAction_DisplayOption:
+		{
+			FormatEx(buffer, maxlength, "%T", "Gag Player", param);
+		}
+
+		case TopMenuAction_SelectOption:
+		{
+			DisplayTargetMenu(param, "Gag");    // Someone chose to ban someone, show the list of users menu
+		}
+	}
+}
+
+public void AdminMenu_Mute(TopMenu       topmenu,
+                   TopMenuAction action,       // Action being performed
+                   TopMenuObject object_id,    // The object ID (if used)
+                   int           param,        // client idx of admin who chose the option (if used)
+                   char[] buffer,              // Output buffer (if used)
+                   int maxlength)              // Output buffer (if used)
+{
+	/* Clear the Ownreason bool, so he is able to chat again;) */
+	g_ownReasons[param] = false;
+
+	switch (action)
+	{
+		// We are only being displayed, We only need to show the option name
+		case TopMenuAction_DisplayOption:
+		{
+			FormatEx(buffer, maxlength, "%T", "Mute Player", param);
+		}
+
+		case TopMenuAction_SelectOption:
+		{
+			DisplayTargetMenu(param, "Mute");    // Someone chose to ban someone, show the list of users menu
+		}
+	}
+}
+
+
+public void AdminMenu_Silence(TopMenu       topmenu,
+                   TopMenuAction action,       // Action being performed
+                   TopMenuObject object_id,    // The object ID (if used)
+                   int           param,        // client idx of admin who chose the option (if used)
+                   char[] buffer,              // Output buffer (if used)
+                   int maxlength)              // Output buffer (if used)
+{
+	/* Clear the Ownreason bool, so he is able to chat again;) */
+	g_ownReasons[param] = false;
+
+	switch (action)
+	{
+		// We are only being displayed, We only need to show the option name
+		case TopMenuAction_DisplayOption:
+		{
+			FormatEx(buffer, maxlength, "%T", "Silence Player", param);
+		}
+
+		case TopMenuAction_SelectOption:
+		{
+			DisplayTargetMenu(param, "Silence");    // Someone chose to ban someone, show the list of users menu
+		}
+	}
+}
+
 public int MenuHandler_ReasonSelected(Menu menu, MenuAction action, int param1, int param2)
 {
 	switch (action)
@@ -3281,25 +3382,26 @@ public int MenuHandler_TimeList(Menu menu, MenuAction action, int param1, int pa
 	return 0;
 }
 
-stock void DisplayTargetMenu(int client, char sPhrase[32])
+stock void DisplayTargetMenu(int client, char sAlias[32])
 {
-	
-	if(StrContains(sPhrase, "Ban", false) != -1)
+	char sPhrase[32];
+
+	if(StrContains(sAlias, "Ban", false) != -1)
 	{
 		sPhrase = "Ban player";
 		g_menuAction[client] = Penalty_Ban;
 	}
-	else if(StrContains(sPhrase, "Gag", false) != -1)
+	else if(StrContains(sAlias, "Gag", false) != -1)
 	{
 		sPhrase = "Gag Player";
 		g_menuAction[client] = Penalty_Gag;
 	}
-	else if(StrContains(sPhrase, "Mute", false) != -1)
+	else if(StrContains(sAlias, "Mute", false) != -1)
 	{
 		sPhrase = "Mute Player";
 		g_menuAction[client] = Penalty_Mute;
 	}
-	else if(StrContains(sPhrase, "Silence", false) != -1)
+	else if(StrContains(sAlias, "Silence", false) != -1)
 	{
 		sPhrase = "Silence Player";
 		g_menuAction[client] = Penalty_Silence;
