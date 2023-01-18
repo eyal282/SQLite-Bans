@@ -2,7 +2,7 @@
 {
 	"Version"
 	{
-		"Latest"	"4.4"
+		"Latest"	"4.5"
 	}
 	
 	"Notes"	"Mandatory optional dependency, mute indicator. Very useful and can be toggled off."
