@@ -778,7 +778,7 @@ public void OnAllPluginsLoaded()
 
 #endif
 
-	SetConVarString(UC_CreateConVar("sqlite_bans_version", PLUGIN_VERSION, _, FCVAR_NOTIFY), PLUGIN_VERSION);
+	SetConVarString(CreateConVar("sqlite_bans_version", PLUGIN_VERSION, _, FCVAR_NOTIFY), PLUGIN_VERSION);
 	hcv_Tag               = UC_CreateConVar("sqlite_bans_tag", "[{RED}SQLiteBans{NORMAL}] {NORMAL}", _, FCVAR_PROTECTED);
 	hcv_Website           = UC_CreateConVar("sqlite_bans_url", "http://yourwebsite.com", "Url to direct banned players to go to if they wish to appeal their ban", FCVAR_PROTECTED);
 	hcv_LogMethod         = UC_CreateConVar("sqlite_bans_log_method", "1", "0 - Log in the painful to look at \"L20190412.log\" files. 1 - Log in a seperate file, in sourcemod/logs/SQLiteBans.log", FCVAR_PROTECTED);
