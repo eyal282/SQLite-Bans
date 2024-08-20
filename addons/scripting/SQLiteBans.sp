@@ -1996,7 +1996,7 @@ public void SQLCB_Unban_FindBans(Handle db, Handle hndl, const char[] sError, Ha
 		CloseHandle(DP);
 		int client = GetEntityOfUserId(UserId);
 
-		ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "No bans found", TargetArg);
+		ReplyToCommandBySource(client, CmdReplySource, "%s%t", PREFIX, "No Bans Found", TargetArg);
 	}
 
 	SQL_FetchRow(hndl);
