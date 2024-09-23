@@ -63,7 +63,7 @@ native bool BanClient(int client,
 					  int flags, 
 					  const char[] reason, 
 					  const char[] kick_message="", 
-					  const char[] command="",
+					  const char[] command="if this is empty, the ban will fail",
 					  any source=0);
 
 */
@@ -89,7 +89,7 @@ native bool BanIdentity(const char[] identity,
 						int time, 
 						int flags, 
 						const char[] reason,
-						const char[] command="",
+						const char[] command="if this is empty, the ban will fail",
 						any source=0);
 
 */
